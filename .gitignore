@@ -1,0 +1,11 @@
+# Build outputs
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+
+# Rojo
+sourcemap.json
+
+# OS
+.DS_Store
