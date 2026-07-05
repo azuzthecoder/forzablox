@@ -14,7 +14,15 @@ local player = Players.LocalPlayer
 local C = Config.Colors
 
 local counts: { [string]: number } = {}
+local clickUpgrades: { [string]: boolean } = {}
 local treatsValue: NumberValue? = nil
+
+type UpgradeCard = {
+	button: TextButton,
+	costLabel: TextLabel,
+	upgrade: any,
+}
+local upgradeCards: { UpgradeCard } = {}
 
 type Card = {
 	button: TextButton,
@@ -83,6 +91,18 @@ local function refresh()
 		perSecond += gen.rate * (counts[gen.id] or 0)
 	end
 	tpsLabel.Text = "per second: " .. formatRate(perSecond)
+		.. "   •   per click: " .. formatNumber(Config.ClickAmount(clickUpgrades))
+
+	for _, card in upgradeCards do
+		local owned = clickUpgrades[card.upgrade.id] == true
+		card.button.Visible = not owned
+		if not owned then
+			local affordable = treats >= card.upgrade.cost
+			card.costLabel.TextColor3 = affordable and C.PinkDark or C.TextSoft
+			card.button.BackgroundColor3 = affordable and C.Panel or C.Background
+			card.button.AutoButtonColor = affordable
+		end
+	end
 
 	for _, card in cards do
 		local owned = counts[card.gen.id] or 0
@@ -156,13 +176,77 @@ function Shop.Start()
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Parent = list
 
+	-- ============== Click upgrades section (Stage 3) ==============
+	local buyUpgrade = ReplicatedStorage:WaitForChild("BuyClickUpgrade") :: RemoteEvent
+
+	label(list, {
+		Size = UDim2.new(1, -8, 0, 24),
+		TextSize = 17,
+		TextColor3 = C.TextSoft,
+		Text = "⚡ Click Upgrades",
+		LayoutOrder = 1,
+	})
+
+	for i, upgrade in Config.ClickUpgrades do
+		local card = Instance.new("TextButton")
+		card.Size = UDim2.new(1, -8, 0, 54)
+		card.BackgroundColor3 = C.Panel
+		card.BorderSizePixel = 0
+		card.Text = ""
+		card.LayoutOrder = 1 + i
+		round(card, 12)
+		card.Parent = list
+
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = C.PanelShadow
+		stroke.Thickness = 2
+		stroke.Parent = card
+
+		label(card, {
+			Position = UDim2.new(0, 12, 0, 0),
+			Size = UDim2.new(0, 32, 1, 0),
+			TextSize = 24,
+			Text = upgrade.icon,
+		})
+		label(card, {
+			Position = UDim2.new(0, 50, 0, 7),
+			Size = UDim2.new(1, -60, 0, 20),
+			TextSize = 16,
+			Text = upgrade.name .. ((upgrade :: any).mult
+				and ("  (x" .. (upgrade :: any).mult .. " click)")
+				or ("  (+" .. (upgrade :: any).add .. " click)")),
+		})
+		local costLabel = label(card, {
+			Position = UDim2.new(0, 50, 0, 28),
+			Size = UDim2.new(1, -60, 0, 18),
+			TextSize = 14,
+			TextColor3 = C.PinkDark,
+			Text = "🍪 " .. formatNumber(upgrade.cost),
+		})
+
+		card.MouseButton1Click:Connect(function()
+			buyUpgrade:FireServer(upgrade.id)
+		end)
+
+		table.insert(upgradeCards, { button = card, costLabel = costLabel, upgrade = upgrade })
+	end
+
+	-- ============== Generators section (Stage 2) ==============
+	label(list, {
+		Size = UDim2.new(1, -8, 0, 24),
+		TextSize = 17,
+		TextColor3 = C.TextSoft,
+		Text = "🐱 Cats (per second)",
+		LayoutOrder = 50,
+	})
+
 	for order, gen in Config.Generators do
 		local card = Instance.new("TextButton")
 		card.Size = UDim2.new(1, -8, 0, 76)
 		card.BackgroundColor3 = C.Panel
 		card.BorderSizePixel = 0
 		card.Text = ""
-		card.LayoutOrder = order
+		card.LayoutOrder = 50 + order
 		round(card, 14)
 		card.Parent = list
 
@@ -225,9 +309,10 @@ function Shop.Start()
 
 	-- ============================ SYNC ============================
 
-	shopSync.OnClientEvent:Connect(function(newCounts)
-		if type(newCounts) == "table" then
-			counts = newCounts
+	shopSync.OnClientEvent:Connect(function(payload)
+		if type(payload) == "table" then
+			counts = payload.counts or {}
+			clickUpgrades = payload.clickUpgrades or {}
 			refresh()
 		end
 	end)

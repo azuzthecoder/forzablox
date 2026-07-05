@@ -266,11 +266,12 @@ local function popup(amount: number, x: number, y: number)
 	end)
 end
 
+local lastClickX, lastClickY = 0, 0
+
 catButton.MouseButton1Down:Connect(function(x, y)
+	lastClickX, lastClickY = x, y
 	clickEvent:FireServer()
 
-	-- Instant feedback (server confirms the real amount right after)
-	popup(Config.TreatsPerClick, x, y)
 	meow.PlaybackSpeed = rng:NextNumber(0.92, 1.12)
 	meow:Play()
 
@@ -280,9 +281,12 @@ catButton.MouseButton1Down:Connect(function(x, y)
 	end)
 end)
 
--- Server-confirmed gain (kept for when multipliers arrive in later stages;
--- for now the counter below is the authoritative display)
-clickEvent.OnClientEvent:Connect(function(_gained) end)
+-- Popup shows the server-confirmed amount (includes click upgrades)
+clickEvent.OnClientEvent:Connect(function(gained)
+	if type(gained) == "number" then
+		popup(gained, lastClickX, lastClickY)
+	end
+end)
 
 -- ============================ COUNTER ============================
 

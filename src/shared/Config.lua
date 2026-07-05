@@ -27,6 +27,18 @@ local Config = {
 		{ id = "temple", name = "Cat Temple", icon = "⛩️", rate = 7800, baseCost = 20000000 },
 	},
 
+	-- One-time click upgrades (Cookie Clicker style). "add" raises the base
+	-- treats per click; "mult" multiplies the total afterwards.
+	ClickUpgrades = {
+		{ id = "toebean", name = "Extra Toe Bean", icon = "🐾", cost = 100, add = 1 },
+		{ id = "claws", name = "Sharp Claws", icon = "✂️", cost = 750, add = 2 },
+		{ id = "doublepaws", name = "Double Paws", icon = "🙌", cost = 5000, mult = 2 },
+		{ id = "coffee", name = "Caffeinated Cat", icon = "☕", cost = 50000, mult = 2 },
+		{ id = "titanium", name = "Titanium Beans", icon = "🔩", cost = 250000, add = 25 },
+		{ id = "zoomies", name = "Zoomies Mode", icon = "💨", cost = 2000000, mult = 3 },
+		{ id = "cosmic", name = "Cosmic Whiskers", icon = "🌟", cost = 50000000, mult = 5 },
+	},
+
 	-- Pastel palette
 	Colors = {
 		Background = Color3.fromRGB(255, 241, 235), -- cream
@@ -50,6 +62,24 @@ end
 -- Price of the next copy given how many are already owned
 function Config.CostFor(gen, owned: number): number
 	return math.floor(gen.baseCost * Config.CostGrowth ^ owned + 0.5)
+end
+
+Config.ClickUpgradesById = {}
+for _, upgrade in Config.ClickUpgrades do
+	Config.ClickUpgradesById[upgrade.id] = upgrade
+end
+
+-- Treats per click given a set of owned upgrade ids ({ [id] = true })
+function Config.ClickAmount(ownedUpgrades: { [string]: boolean }): number
+	local base = Config.TreatsPerClick
+	local mult = 1
+	for _, upgrade in Config.ClickUpgrades do
+		if ownedUpgrades[upgrade.id] then
+			base += (upgrade :: any).add or 0
+			mult *= (upgrade :: any).mult or 1
+		end
+	end
+	return base * mult
 end
 
 return Config

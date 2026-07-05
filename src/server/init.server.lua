@@ -20,10 +20,15 @@ local shopSync = Instance.new("RemoteEvent")
 shopSync.Name = "ShopSync"
 shopSync.Parent = ReplicatedStorage
 
+local buyClickUpgrade = Instance.new("RemoteEvent")
+buyClickUpgrade.Name = "BuyClickUpgrade"
+buyClickUpgrade.Parent = ReplicatedStorage
+
 type PlayerState = {
 	windowStart: number,
 	clickCount: number,
 	counts: { [string]: number }, -- generatorId -> owned
+	clickUpgrades: { [string]: boolean }, -- upgradeId -> owned
 }
 local states: { [Player]: PlayerState } = {}
 
@@ -35,7 +40,10 @@ end
 local function syncShop(player: Player)
 	local state = states[player]
 	if state then
-		shopSync:FireClient(player, state.counts)
+		shopSync:FireClient(player, {
+			counts = state.counts,
+			clickUpgrades = state.clickUpgrades,
+		})
 	end
 end
 
@@ -49,7 +57,7 @@ local function onPlayerAdded(player: Player)
 	treats.Value = 0
 	treats.Parent = stats
 	stats.Parent = player
-	states[player] = { windowStart = os.clock(), clickCount = 0, counts = {} }
+	states[player] = { windowStart = os.clock(), clickCount = 0, counts = {}, clickUpgrades = {} }
 end
 
 Players.PlayerAdded:Connect(onPlayerAdded)
@@ -80,9 +88,30 @@ clickEvent.OnServerEvent:Connect(function(player)
 	end
 	state.clickCount += 1
 
-	local gained = Config.TreatsPerClick
+	local gained = Config.ClickAmount(state.clickUpgrades)
 	treats.Value += gained
 	clickEvent:FireClient(player, gained)
+end)
+
+-- ============================ CLICK UPGRADES (Stage 3) ============================
+
+buyClickUpgrade.OnServerEvent:Connect(function(player, upgradeId)
+	local state = states[player]
+	local treats = getTreats(player)
+	if not state or not treats or type(upgradeId) ~= "string" then
+		return
+	end
+	local upgrade = Config.ClickUpgradesById[upgradeId]
+	if not upgrade or state.clickUpgrades[upgradeId] then
+		return
+	end
+	if treats.Value < upgrade.cost then
+		return
+	end
+
+	treats.Value -= upgrade.cost
+	state.clickUpgrades[upgradeId] = true
+	syncShop(player)
 end)
 
 -- ============================ SHOP (Stage 2) ============================
