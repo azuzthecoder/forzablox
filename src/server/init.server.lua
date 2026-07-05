@@ -54,6 +54,9 @@ type PlayerState = {
 	boostEnds: number,
 	totalEarned: number,
 	clicks: number,
+	loaded: boolean, -- save data applied (or confirmed new player)
+	loading: boolean, -- load in progress
+	persist: boolean, -- false if load failed: never overwrite their data
 }
 
 local function boostFor(state: PlayerState, now: number): number
@@ -78,6 +81,11 @@ end
 
 -- ============================ PLAYERS ============================
 
+-- Implemented in the persistence section (Stage 6); forward-declared so
+-- the player add/remove handlers above them can call through.
+local loadPlayerData: (Player) -> () = function() end
+local savePlayerData: (Player) -> () = function() end
+
 local function onPlayerAdded(player: Player)
 	local stats = Instance.new("Folder")
 	stats.Name = "leaderstats"
@@ -98,10 +106,14 @@ local function onPlayerAdded(player: Player)
 		boostEnds = 0,
 		totalEarned = 0,
 		clicks = 0,
+		loaded = false,
+		loading = false,
+		persist = false,
 	}
 	player:SetAttribute("TotalEarned", 0)
 	player:SetAttribute("Clicks", 0)
 	player:SetAttribute("PerSecond", 0)
+	task.spawn(loadPlayerData, player)
 end
 
 Players.PlayerAdded:Connect(onPlayerAdded)
@@ -110,6 +122,7 @@ for _, player in Players:GetPlayers() do
 end
 
 Players.PlayerRemoving:Connect(function(player)
+	savePlayerData(player)
 	states[player] = nil
 end)
 
@@ -321,6 +334,128 @@ task.spawn(function()
 	end
 end)
 
-Players.PlayerRemoving:Connect(saveScore)
+-- ============================ SAVE DATA (Stage 6) ============================
 
-print("[CatClicker] Server ready — stages 1-5")
+local saveStore: DataStore? = nil
+do
+	local ok, result = pcall(function()
+		return DataStoreService:GetDataStore("CatClickerSave_v1")
+	end)
+	if ok then
+		saveStore = result
+	else
+		warn("[CatClicker] Save DataStore unavailable, progress won't persist: " .. tostring(result))
+	end
+end
+
+loadPlayerData = function(player: Player)
+	local state = states[player]
+	if not state or state.loaded or state.loading then
+		return
+	end
+	state.loading = true
+
+	local data: any = nil
+	local success = false
+	if saveStore then
+		for attempt = 1, 3 do
+			local ok, result = pcall(function()
+				return (saveStore :: DataStore):GetAsync("player_" .. player.UserId)
+			end)
+			if ok then
+				success = true
+				data = result
+				break
+			end
+			task.wait(2 ^ attempt)
+		end
+	end
+
+	state = states[player] -- player may have left while we yielded
+	if not state then
+		return
+	end
+	state.loading = false
+	state.loaded = true
+	-- Only allow future saves if the load actually worked; otherwise we'd
+	-- risk overwriting good data with a fresh profile while DataStore is down.
+	state.persist = success
+	if not success then
+		warn("[CatClicker] Failed to load data for " .. player.Name .. "; playing session-only")
+	end
+
+	if type(data) == "table" then
+		local treats = getTreats(player)
+		if treats then
+			treats.Value = tonumber(data.treats) or 0
+		end
+		state.totalEarned = tonumber(data.totalEarned) or 0
+		state.clicks = math.floor(tonumber(data.clicks) or 0)
+		if type(data.counts) == "table" then
+			for id, owned in data.counts do
+				if Config.GeneratorsById[id] and type(owned) == "number" then
+					state.counts[id] = math.floor(owned)
+				end
+			end
+		end
+		if type(data.clickUpgrades) == "table" then
+			for id, has in data.clickUpgrades do
+				if Config.ClickUpgradesById[id] and has == true then
+					state.clickUpgrades[id] = true
+				end
+			end
+		end
+		player:SetAttribute("TotalEarned", state.totalEarned)
+		player:SetAttribute("Clicks", state.clicks)
+		syncShop(player)
+	end
+end
+
+savePlayerData = function(player: Player)
+	local state = states[player]
+	local treats = getTreats(player)
+	if not state or not treats or not state.loaded or not state.persist or not saveStore then
+		return
+	end
+	local payload = {
+		treats = treats.Value,
+		totalEarned = state.totalEarned,
+		clicks = state.clicks,
+		counts = state.counts,
+		clickUpgrades = state.clickUpgrades,
+	}
+	for attempt = 1, 3 do
+		local ok, err = pcall(function()
+			(saveStore :: DataStore):SetAsync("player_" .. player.UserId, payload)
+		end)
+		if ok then
+			break
+		end
+		warn("[CatClicker] Save attempt " .. attempt .. " failed for " .. player.Name .. ": " .. tostring(err))
+		task.wait(2)
+	end
+	saveScore(player)
+end
+
+-- Catch anyone who joined before the loader above was assigned
+for _, player in Players:GetPlayers() do
+	task.spawn(loadPlayerData, player)
+end
+
+-- Autosave every 3 minutes
+task.spawn(function()
+	while true do
+		task.wait(180)
+		for player in states do
+			task.spawn(savePlayerData, player)
+		end
+	end
+end)
+
+game:BindToClose(function()
+	for player in states do
+		savePlayerData(player)
+	end
+end)
+
+print("[CatClicker] Server ready — stages 1-6 (full game)")
