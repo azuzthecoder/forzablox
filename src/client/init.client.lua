@@ -309,4 +309,8 @@ Shop.Start()
 local GoldenCat = require(script.GoldenCat)
 GoldenCat.Start()
 
-print("[CatClicker] Client ready — stages 1-4")
+-- Stage 5: stats panel + global leaderboard
+local Stats = require(script.Stats)
+Stats.Start()
+
+print("[CatClicker] Client ready — stages 1-5")

@@ -5,6 +5,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local DataStoreService = game:GetService("DataStoreService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
@@ -36,6 +37,10 @@ local boostSync = Instance.new("RemoteEvent")
 boostSync.Name = "BoostSync"
 boostSync.Parent = ReplicatedStorage
 
+local leaderboardSync = Instance.new("RemoteEvent")
+leaderboardSync.Name = "LeaderboardSync"
+leaderboardSync.Parent = ReplicatedStorage
+
 local goldenRng = Random.new()
 
 type PlayerState = {
@@ -47,6 +52,8 @@ type PlayerState = {
 	goldenOfferExpires: number?,
 	boostMult: number,
 	boostEnds: number,
+	totalEarned: number,
+	clicks: number,
 }
 
 local function boostFor(state: PlayerState, now: number): number
@@ -89,7 +96,12 @@ local function onPlayerAdded(player: Player)
 		goldenOfferExpires = nil,
 		boostMult = 1,
 		boostEnds = 0,
+		totalEarned = 0,
+		clicks = 0,
 	}
+	player:SetAttribute("TotalEarned", 0)
+	player:SetAttribute("Clicks", 0)
+	player:SetAttribute("PerSecond", 0)
 end
 
 Players.PlayerAdded:Connect(onPlayerAdded)
@@ -122,6 +134,10 @@ clickEvent.OnServerEvent:Connect(function(player)
 
 	local gained = Config.ClickAmount(state.clickUpgrades) * boostFor(state, now)
 	treats.Value += gained
+	state.totalEarned += gained
+	state.clicks += 1
+	player:SetAttribute("TotalEarned", state.totalEarned)
+	player:SetAttribute("Clicks", state.clicks)
 	clickEvent:FireClient(player, gained)
 end)
 
@@ -223,14 +239,88 @@ task.spawn(function()
 					perSecond += gen.rate * owned
 				end
 			end
+			if player:GetAttribute("PerSecond") ~= perSecond then
+				player:SetAttribute("PerSecond", perSecond)
+			end
 			if perSecond > 0 then
 				local treats = getTreats(player)
 				if treats then
-					treats.Value += perSecond * TICK * boostFor(state, os.clock())
+					local earned = perSecond * TICK * boostFor(state, os.clock())
+					treats.Value += earned
+					state.totalEarned += earned
+					player:SetAttribute("TotalEarned", state.totalEarned)
 				end
 			end
 		end
 	end
 end)
 
-print("[CatClicker] Server ready — stages 1-2 (clicks + shop)")
+-- ============================ LEADERBOARD (Stage 5) ============================
+
+local leaderStore: OrderedDataStore? = nil
+do
+	local ok, result = pcall(function()
+		return DataStoreService:GetOrderedDataStore("CatClickerLeaderboard_v1")
+	end)
+	if ok then
+		leaderStore = result
+	else
+		warn("[CatClicker] Leaderboard DataStore unavailable: " .. tostring(result))
+	end
+end
+
+local nameCache: { [number]: string } = {}
+
+local function nameFor(userId: number): string
+	if nameCache[userId] then
+		return nameCache[userId]
+	end
+	local online = Players:GetPlayerByUserId(userId)
+	if online then
+		nameCache[userId] = online.DisplayName
+		return online.DisplayName
+	end
+	local ok, name = pcall(function()
+		return Players:GetNameFromUserIdAsync(userId)
+	end)
+	nameCache[userId] = ok and name or "???"
+	return nameCache[userId]
+end
+
+local function saveScore(player: Player)
+	local state = states[player]
+	if leaderStore and state and state.totalEarned >= 1 then
+		pcall(function()
+			(leaderStore :: OrderedDataStore):SetAsync(tostring(player.UserId), math.floor(state.totalEarned))
+		end)
+	end
+end
+
+task.spawn(function()
+	while true do
+		-- Push everyone's scores, then broadcast the top 10
+		for player in states do
+			saveScore(player)
+		end
+		if leaderStore then
+			local ok, pages = pcall(function()
+				return (leaderStore :: OrderedDataStore):GetSortedAsync(false, 10)
+			end)
+			if ok then
+				local top = {}
+				for _, entry in pages:GetCurrentPage() do
+					table.insert(top, {
+						name = nameFor(tonumber(entry.key) :: number),
+						score = entry.value,
+					})
+				end
+				leaderboardSync:FireAllClients(top)
+			end
+		end
+		task.wait(30)
+	end
+end)
+
+Players.PlayerRemoving:Connect(saveScore)
+
+print("[CatClicker] Server ready — stages 1-5")
