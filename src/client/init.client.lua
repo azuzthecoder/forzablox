@@ -305,4 +305,8 @@ task.spawn(watchTreats)
 local Shop = require(script.Shop)
 Shop.Start()
 
-print("[CatClicker] Client ready — stages 1-2")
+-- Stage 4: golden cat bonus event
+local GoldenCat = require(script.GoldenCat)
+GoldenCat.Start()
+
+print("[CatClicker] Client ready — stages 1-4")

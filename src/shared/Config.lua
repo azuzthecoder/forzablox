@@ -39,6 +39,16 @@ local Config = {
 		{ id = "cosmic", name = "Cosmic Whiskers", icon = "🌟", cost = 50000000, mult = 5 },
 	},
 
+	-- Golden Cat bonus event (like Cookie Clicker's golden cookie)
+	GoldenCat = {
+		MinInterval = 60, -- seconds between spawns (random in range)
+		MaxInterval = 160,
+		ClickWindow = 12, -- how long it stays on screen
+		Multiplier = 7, -- boost to ALL treat gains
+		MinDuration = 30, -- boost length (random in range)
+		MaxDuration = 60,
+	},
+
 	-- Pastel palette
 	Colors = {
 		Background = Color3.fromRGB(255, 241, 235), -- cream

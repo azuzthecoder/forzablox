@@ -24,12 +24,34 @@ local buyClickUpgrade = Instance.new("RemoteEvent")
 buyClickUpgrade.Name = "BuyClickUpgrade"
 buyClickUpgrade.Parent = ReplicatedStorage
 
+local goldenOffer = Instance.new("RemoteEvent")
+goldenOffer.Name = "GoldenCatOffer"
+goldenOffer.Parent = ReplicatedStorage
+
+local goldenClick = Instance.new("RemoteEvent")
+goldenClick.Name = "GoldenCatClick"
+goldenClick.Parent = ReplicatedStorage
+
+local boostSync = Instance.new("RemoteEvent")
+boostSync.Name = "BoostSync"
+boostSync.Parent = ReplicatedStorage
+
+local goldenRng = Random.new()
+
 type PlayerState = {
 	windowStart: number,
 	clickCount: number,
 	counts: { [string]: number }, -- generatorId -> owned
 	clickUpgrades: { [string]: boolean }, -- upgradeId -> owned
+	nextGoldenAt: number,
+	goldenOfferExpires: number?,
+	boostMult: number,
+	boostEnds: number,
 }
+
+local function boostFor(state: PlayerState, now: number): number
+	return now < state.boostEnds and state.boostMult or 1
+end
 local states: { [Player]: PlayerState } = {}
 
 local function getTreats(player: Player): NumberValue?
@@ -57,7 +79,17 @@ local function onPlayerAdded(player: Player)
 	treats.Value = 0
 	treats.Parent = stats
 	stats.Parent = player
-	states[player] = { windowStart = os.clock(), clickCount = 0, counts = {}, clickUpgrades = {} }
+	states[player] = {
+		windowStart = os.clock(),
+		clickCount = 0,
+		counts = {},
+		clickUpgrades = {},
+		nextGoldenAt = os.clock()
+			+ goldenRng:NextNumber(Config.GoldenCat.MinInterval, Config.GoldenCat.MaxInterval),
+		goldenOfferExpires = nil,
+		boostMult = 1,
+		boostEnds = 0,
+	}
 end
 
 Players.PlayerAdded:Connect(onPlayerAdded)
@@ -88,9 +120,47 @@ clickEvent.OnServerEvent:Connect(function(player)
 	end
 	state.clickCount += 1
 
-	local gained = Config.ClickAmount(state.clickUpgrades)
+	local gained = Config.ClickAmount(state.clickUpgrades) * boostFor(state, now)
 	treats.Value += gained
 	clickEvent:FireClient(player, gained)
+end)
+
+-- ============================ GOLDEN CAT (Stage 4) ============================
+
+goldenClick.OnServerEvent:Connect(function(player)
+	local state = states[player]
+	if not state then
+		return
+	end
+	local now = os.clock()
+	if not state.goldenOfferExpires or now > state.goldenOfferExpires :: number then
+		return -- no golden cat was live; ignore
+	end
+	state.goldenOfferExpires = nil
+
+	local duration = goldenRng:NextNumber(Config.GoldenCat.MinDuration, Config.GoldenCat.MaxDuration)
+	state.boostMult = Config.GoldenCat.Multiplier
+	state.boostEnds = now + duration
+	boostSync:FireClient(player, Config.GoldenCat.Multiplier, duration)
+end)
+
+-- Spawner: offers each player a golden cat on their own random schedule
+task.spawn(function()
+	while true do
+		task.wait(1)
+		local now = os.clock()
+		for player, state in states do
+			if state.goldenOfferExpires and now > state.goldenOfferExpires :: number then
+				state.goldenOfferExpires = nil
+			end
+			if not state.goldenOfferExpires and now >= state.nextGoldenAt then
+				state.goldenOfferExpires = now + Config.GoldenCat.ClickWindow
+				state.nextGoldenAt = now + Config.GoldenCat.MaxDuration
+					+ goldenRng:NextNumber(Config.GoldenCat.MinInterval, Config.GoldenCat.MaxInterval)
+				goldenOffer:FireClient(player, Config.GoldenCat.ClickWindow)
+			end
+		end
+	end
 end)
 
 -- ============================ CLICK UPGRADES (Stage 3) ============================
@@ -156,7 +226,7 @@ task.spawn(function()
 			if perSecond > 0 then
 				local treats = getTreats(player)
 				if treats then
-					treats.Value += perSecond * TICK
+					treats.Value += perSecond * TICK * boostFor(state, os.clock())
 				end
 			end
 		end
