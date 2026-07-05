@@ -11,7 +11,13 @@ local Extras = {}
 
 local player = Players.LocalPlayer
 local C = Config.Colors
+
+-- PlaytimeBase changes when a save loads or the save is reset; restart the
+-- session clock then so playtime = base + time since that moment.
 local sessionStart = os.clock()
+player:GetAttributeChangedSignal("PlaytimeBase"):Connect(function()
+	sessionStart = os.clock()
+end)
 
 local function round(instance: Instance, radius: number)
 	local corner = Instance.new("UICorner")
@@ -205,8 +211,8 @@ function Extras.Start()
 		end
 	end)
 
-	-- ============== Info panel ==============
-	local infoOverlay, infoPanel = modal(gui, "⚙️ Info", 190)
+	-- ============== Settings panel ==============
+	local infoOverlay, infoPanel = modal(gui, "⚙️ Settings", 260)
 	local playtimeLabel = label(infoPanel, {
 		Position = UDim2.new(0, 20, 0, 52),
 		Size = UDim2.new(1, -40, 0, 24),
@@ -214,13 +220,54 @@ function Extras.Start()
 		Text = "Playtime: 0m 0s",
 	})
 	label(infoPanel, {
-		Position = UDim2.new(0, 20, 0, 88),
-		Size = UDim2.new(1, -40, 0, 60),
+		Position = UDim2.new(0, 20, 0, 84),
+		Size = UDim2.new(1, -40, 0, 56),
 		TextSize = 14,
 		TextWrapped = true,
 		TextColor3 = C.PinkDark,
 		Text = "💜 Join our Roblox group for +10% Treats!\n(group link coming soon)",
 	})
+
+	-- Reset Save (testing) with its own confirmation
+	local resetBtn = button(infoPanel, "🗑️ RESET SAVE", {
+		Position = UDim2.new(0, 20, 1, -56),
+		Size = UDim2.new(1, -40, 0, 40),
+		BackgroundColor3 = Color3.fromRGB(226, 96, 96),
+	})
+
+	local resetOverlay, resetPanel = modal(gui, "🗑️ Reset Save?", 170)
+	label(resetPanel, {
+		Position = UDim2.new(0, 20, 0, 44),
+		Size = UDim2.new(1, -40, 0, 56),
+		TextSize = 15,
+		TextWrapped = true,
+		Text = "This deletes ALL progress — treats, cats, upgrades, Cat Points and codes. Are you sure?",
+	})
+	local resetYes = button(resetPanel, "DELETE IT ALL", {
+		Position = UDim2.new(0, 20, 1, -56),
+		Size = UDim2.new(0.5, -30, 0, 40),
+		BackgroundColor3 = Color3.fromRGB(226, 96, 96),
+	})
+	local resetNo = button(resetPanel, "Keep it!", {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -20, 1, -56),
+		Size = UDim2.new(0.5, -30, 0, 40),
+		BackgroundColor3 = C.Background,
+		TextColor3 = C.Text,
+	})
+
+	resetBtn.MouseButton1Click:Connect(function()
+		infoOverlay.Visible = false
+		resetOverlay.Visible = true
+	end)
+	resetNo.MouseButton1Click:Connect(function()
+		resetOverlay.Visible = false
+	end)
+	resetYes.MouseButton1Click:Connect(function()
+		resetOverlay.Visible = false
+		local resetFn = ReplicatedStorage:WaitForChild("ResetSave") :: RemoteFunction
+		resetFn:InvokeServer()
+	end)
 	task.spawn(function()
 		while true do
 			if infoOverlay.Visible then
@@ -253,6 +300,25 @@ function Extras.Start()
 	round(infoBtn, 0)
 	infoBtn.MouseButton1Click:Connect(function()
 		infoOverlay.Visible = not infoOverlay.Visible
+	end)
+
+	-- ============== Auto-save indicator ==============
+	local savedNotify = ReplicatedStorage:WaitForChild("SavedNotify") :: RemoteEvent
+	local savedLabel = label(gui, {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -66),
+		Size = UDim2.new(0, 200, 0, 24),
+		TextSize = 16,
+		TextColor3 = Color3.fromRGB(90, 170, 100),
+		TextTransparency = 1,
+		Text = "💾 Saved!",
+	})
+	savedNotify.OnClientEvent:Connect(function()
+		local TweenService = game:GetService("TweenService")
+		savedLabel.TextTransparency = 0
+		task.delay(1.4, function()
+			TweenService:Create(savedLabel, TweenInfo.new(0.6), { TextTransparency = 1 }):Play()
+		end)
 	end)
 
 	-- ============== Rebirth button visibility ==============

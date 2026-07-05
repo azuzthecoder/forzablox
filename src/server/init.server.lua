@@ -49,6 +49,14 @@ local redeemFn = Instance.new("RemoteFunction")
 redeemFn.Name = "RedeemCode"
 redeemFn.Parent = ReplicatedStorage
 
+local resetFn = Instance.new("RemoteFunction")
+resetFn.Name = "ResetSave"
+resetFn.Parent = ReplicatedStorage
+
+local savedNotify = Instance.new("RemoteEvent")
+savedNotify.Name = "SavedNotify"
+savedNotify.Parent = ReplicatedStorage
+
 local goldenRng = Random.new()
 
 type PlayerState = {
@@ -513,12 +521,53 @@ savePlayerData = function(player: Player)
 			(saveStore :: DataStore):SetAsync("player_" .. player.UserId, payload)
 		end)
 		if ok then
+			if player.Parent then -- still in game: flash the "Saved!" indicator
+				savedNotify:FireClient(player)
+			end
 			break
 		end
 		warn("[CatClicker] Save attempt " .. attempt .. " failed for " .. player.Name .. ": " .. tostring(err))
 		task.wait(2)
 	end
 	saveScore(player)
+end
+
+-- Reset Save (testing): wipes the stored profile and the live session state
+resetFn.OnServerInvoke = function(player)
+	local state = states[player]
+	local treats = getTreats(player)
+	if not state or not treats then
+		return false, "Not ready."
+	end
+
+	if saveStore then
+		pcall(function()
+			(saveStore :: DataStore):RemoveAsync("player_" .. player.UserId)
+		end)
+	end
+	if leaderStore then
+		pcall(function()
+			(leaderStore :: OrderedDataStore):SetAsync(tostring(player.UserId), 0)
+		end)
+	end
+
+	treats.Value = 0
+	state.counts = {}
+	state.clickUpgrades = {}
+	state.totalEarned = 0
+	state.clicks = 0
+	state.catPoints = 0
+	state.redeemed = {}
+	state.playtimeBase = 0
+	state.joinedAt = os.clock()
+	state.boostMult = 1
+	state.boostEnds = 0
+	player:SetAttribute("TotalEarned", 0)
+	player:SetAttribute("Clicks", 0)
+	player:SetAttribute("CatPoints", 0)
+	player:SetAttribute("PlaytimeBase", 0)
+	syncShop(player)
+	return true, "Save wiped. Fresh start!"
 end
 
 -- Catch anyone who joined before the loader above was assigned

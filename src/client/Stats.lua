@@ -107,7 +107,7 @@ function Stats.Start()
 	local panel = Instance.new("Frame")
 	panel.AnchorPoint = Vector2.new(0, 1)
 	panel.Position = UDim2.new(0, 12, 1, -12)
-	panel.Size = UDim2.new(0, 250, 0, 144)
+	panel.Size = UDim2.new(0, 250, 0, 168)
 	panel.BackgroundColor3 = C.Panel
 	panel.BackgroundTransparency = 0.06
 	panel.BorderSizePixel = 0
@@ -146,6 +146,30 @@ function Stats.Start()
 		TextColor3 = C.PinkDark,
 		Text = "Cat Points: 0",
 	})
+
+	local timeLabel = label(panel, {
+		Position = UDim2.new(0, 16, 0, 132),
+		Size = UDim2.new(1, -32, 0, 22),
+		TextSize = 14,
+		Text = "Time played: 0m 0s",
+	})
+
+	-- Time played ticker (base resets when a save loads or is wiped)
+	local sessionStart = os.clock()
+	player:GetAttributeChangedSignal("PlaytimeBase"):Connect(function()
+		sessionStart = os.clock()
+	end)
+	task.spawn(function()
+		while true do
+			local total = ((player:GetAttribute("PlaytimeBase") :: number?) or 0) + (os.clock() - sessionStart)
+			local h = math.floor(total / 3600)
+			local m = math.floor((total % 3600) / 60)
+			local s = math.floor(total % 60)
+			timeLabel.Text = h > 0 and ("Time played: %dh %dm %ds"):format(h, m, s)
+				or ("Time played: %dm %ds"):format(m, s)
+			task.wait(1)
+		end
+	end)
 
 	local function updateStats()
 		earnedLabel.Text = "Total earned: " .. formatNumber((player:GetAttribute("TotalEarned") :: number?) or 0)
