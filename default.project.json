@@ -1,5 +1,5 @@
 {
-  "name": "ForzaBlox",
+  "name": "CatClicker",
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
@@ -17,22 +17,6 @@
         "Client": {
           "$path": "src/client"
         }
-      }
-    },
-    "Workspace": {
-      "$properties": {
-        "FilteringEnabled": true
-      }
-    },
-    "Lighting": {
-      "$properties": {
-        "Technology": "Future",
-        "GlobalShadows": true
-      }
-    },
-    "SoundService": {
-      "$properties": {
-        "RespectFilteringEnabled": true
       }
     }
   }
