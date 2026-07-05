@@ -107,7 +107,7 @@ function Stats.Start()
 	local panel = Instance.new("Frame")
 	panel.AnchorPoint = Vector2.new(0, 1)
 	panel.Position = UDim2.new(0, 12, 1, -12)
-	panel.Size = UDim2.new(0, 250, 0, 120)
+	panel.Size = UDim2.new(0, 250, 0, 144)
 	panel.BackgroundColor3 = C.Panel
 	panel.BackgroundTransparency = 0.06
 	panel.BorderSizePixel = 0
@@ -139,16 +139,27 @@ function Stats.Start()
 		TextSize = 14,
 		Text = "Clicks: 0",
 	})
+	local catPointsLabel = label(panel, {
+		Position = UDim2.new(0, 16, 0, 108),
+		Size = UDim2.new(1, -32, 0, 22),
+		TextSize = 14,
+		TextColor3 = C.PinkDark,
+		Text = "Cat Points: 0",
+	})
 
 	local function updateStats()
 		earnedLabel.Text = "Total earned: " .. formatNumber((player:GetAttribute("TotalEarned") :: number?) or 0)
 		local perSecond = (player:GetAttribute("PerSecond") :: number?) or 0
 		tpsLabel.Text = "Per second: " .. (perSecond < 1 and string.format("%.1f", perSecond) or formatNumber(perSecond))
 		clicksLabel.Text = "Clicks: " .. formatNumber((player:GetAttribute("Clicks") :: number?) or 0)
+		local catPoints = (player:GetAttribute("CatPoints") :: number?) or 0
+		catPointsLabel.Text = ("Cat Points: %d  (+%d%%/sec)"):format(
+			catPoints, catPoints * Config.Prestige.BoostPerPoint * 100)
 	end
 	player:GetAttributeChangedSignal("TotalEarned"):Connect(updateStats)
 	player:GetAttributeChangedSignal("PerSecond"):Connect(updateStats)
 	player:GetAttributeChangedSignal("Clicks"):Connect(updateStats)
+	player:GetAttributeChangedSignal("CatPoints"):Connect(updateStats)
 	updateStats()
 end
 

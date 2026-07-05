@@ -41,6 +41,14 @@ local leaderboardSync = Instance.new("RemoteEvent")
 leaderboardSync.Name = "LeaderboardSync"
 leaderboardSync.Parent = ReplicatedStorage
 
+local rebirthFn = Instance.new("RemoteFunction")
+rebirthFn.Name = "Rebirth"
+rebirthFn.Parent = ReplicatedStorage
+
+local redeemFn = Instance.new("RemoteFunction")
+redeemFn.Name = "RedeemCode"
+redeemFn.Parent = ReplicatedStorage
+
 local goldenRng = Random.new()
 
 type PlayerState = {
@@ -57,7 +65,15 @@ type PlayerState = {
 	loaded: boolean, -- save data applied (or confirmed new player)
 	loading: boolean, -- load in progress
 	persist: boolean, -- false if load failed: never overwrite their data
+	catPoints: number,
+	redeemed: { [string]: boolean },
+	joinedAt: number,
+	playtimeBase: number, -- seconds from previous sessions
 }
+
+local function prestigeBoost(state: PlayerState): number
+	return 1 + state.catPoints * Config.Prestige.BoostPerPoint
+end
 
 local function boostFor(state: PlayerState, now: number): number
 	return now < state.boostEnds and state.boostMult or 1
@@ -109,10 +125,16 @@ local function onPlayerAdded(player: Player)
 		loaded = false,
 		loading = false,
 		persist = false,
+		catPoints = 0,
+		redeemed = {},
+		joinedAt = os.clock(),
+		playtimeBase = 0,
 	}
 	player:SetAttribute("TotalEarned", 0)
 	player:SetAttribute("Clicks", 0)
 	player:SetAttribute("PerSecond", 0)
+	player:SetAttribute("CatPoints", 0)
+	player:SetAttribute("PlaytimeBase", 0)
 	task.spawn(loadPlayerData, player)
 end
 
@@ -252,6 +274,7 @@ task.spawn(function()
 					perSecond += gen.rate * owned
 				end
 			end
+			perSecond *= prestigeBoost(state)
 			if player:GetAttribute("PerSecond") ~= perSecond then
 				player:SetAttribute("PerSecond", perSecond)
 			end
@@ -267,6 +290,53 @@ task.spawn(function()
 		end
 	end
 end)
+
+-- ============================ REBIRTH ============================
+
+rebirthFn.OnServerInvoke = function(player)
+	local state = states[player]
+	local treats = getTreats(player)
+	if not state or not treats or not state.loaded then
+		return false, "Not ready yet, try again!"
+	end
+	local points = math.floor(treats.Value / Config.Prestige.Threshold)
+	if points < 1 then
+		return false, "You need at least 1,000,000 treats to rebirth!"
+	end
+
+	treats.Value = 0
+	state.catPoints += points
+	player:SetAttribute("CatPoints", state.catPoints)
+	task.spawn(savePlayerData, player)
+	return true, points
+end
+
+-- ============================ CODES ============================
+
+redeemFn.OnServerInvoke = function(player, code)
+	local state = states[player]
+	local treats = getTreats(player)
+	if not state or not treats or not state.loaded then
+		return false, "Not ready yet, try again!"
+	end
+	if type(code) ~= "string" then
+		return false, "Invalid code."
+	end
+	code = code:upper():gsub("%s+", "")
+	local reward = Config.Codes[code]
+	if not reward then
+		return false, "Invalid code."
+	end
+	if state.redeemed[code] then
+		return false, "You already redeemed that code!"
+	end
+
+	state.redeemed[code] = true
+	treats.Value += reward.treats
+	state.totalEarned += reward.treats
+	player:SetAttribute("TotalEarned", state.totalEarned)
+	return true, "+" .. reward.treats .. " treats! Enjoy 🐱"
+end
 
 -- ============================ LEADERBOARD (Stage 5) ============================
 
@@ -405,8 +475,19 @@ loadPlayerData = function(player: Player)
 				end
 			end
 		end
+		state.catPoints = math.floor(tonumber(data.catPoints) or 0)
+		if type(data.redeemed) == "table" then
+			for code, has in data.redeemed do
+				if type(code) == "string" and has == true then
+					state.redeemed[code] = true
+				end
+			end
+		end
+		state.playtimeBase = tonumber(data.playtime) or 0
 		player:SetAttribute("TotalEarned", state.totalEarned)
 		player:SetAttribute("Clicks", state.clicks)
+		player:SetAttribute("CatPoints", state.catPoints)
+		player:SetAttribute("PlaytimeBase", state.playtimeBase)
 		syncShop(player)
 	end
 end
@@ -423,6 +504,9 @@ savePlayerData = function(player: Player)
 		clicks = state.clicks,
 		counts = state.counts,
 		clickUpgrades = state.clickUpgrades,
+		catPoints = state.catPoints,
+		redeemed = state.redeemed,
+		playtime = state.playtimeBase + (os.clock() - state.joinedAt),
 	}
 	for attempt = 1, 3 do
 		local ok, err = pcall(function()

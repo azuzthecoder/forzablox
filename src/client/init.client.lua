@@ -313,4 +313,8 @@ GoldenCat.Start()
 local Stats = require(script.Stats)
 Stats.Start()
 
-print("[CatClicker] Client ready — stages 1-5")
+-- Rebirth, codes and info panel
+local Extras = require(script.Extras)
+Extras.Start()
+
+print("[CatClicker] Client ready — all systems")

@@ -49,6 +49,17 @@ local Config = {
 		MaxDuration = 60,
 	},
 
+	-- Prestige / rebirth
+	Prestige = {
+		Threshold = 1000000, -- treats needed per Cat Point
+		BoostPerPoint = 0.10, -- +10% treats/sec per Cat Point, forever
+	},
+
+	-- Redeemable codes: CODE -> reward
+	Codes = {
+		MEOW = { treats = 100 },
+	},
+
 	-- Pastel palette
 	Colors = {
 		Background = Color3.fromRGB(255, 241, 235), -- cream
