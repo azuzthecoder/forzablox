@@ -297,4 +297,8 @@ local function watchTreats()
 end
 task.spawn(watchTreats)
 
-print("[CatClicker] Client ready — stage 1")
+-- Stage 2: upgrade shop sidebar
+local Shop = require(script.Shop)
+Shop.Start()
+
+print("[CatClicker] Client ready — stages 1-2")

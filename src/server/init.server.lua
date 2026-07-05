@@ -1,6 +1,7 @@
 --!strict
--- Cat Clicker server — Stage 1: the click mechanic.
--- Owns the Treats leaderstat and validates clicks (with a rate cap).
+-- Cat Clicker server — Stages 1-2: click mechanic + generator shop.
+-- Owns the Treats leaderstat, validates clicks and purchases, and pays out
+-- passive Treats-per-second from owned generators.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -11,8 +12,34 @@ local clickEvent = Instance.new("RemoteEvent")
 clickEvent.Name = "ClickTreat"
 clickEvent.Parent = ReplicatedStorage
 
-type ClickWindow = { windowStart: number, count: number }
-local clickWindows: { [Player]: ClickWindow } = {}
+local buyEvent = Instance.new("RemoteEvent")
+buyEvent.Name = "BuyGenerator"
+buyEvent.Parent = ReplicatedStorage
+
+local shopSync = Instance.new("RemoteEvent")
+shopSync.Name = "ShopSync"
+shopSync.Parent = ReplicatedStorage
+
+type PlayerState = {
+	windowStart: number,
+	clickCount: number,
+	counts: { [string]: number }, -- generatorId -> owned
+}
+local states: { [Player]: PlayerState } = {}
+
+local function getTreats(player: Player): NumberValue?
+	local stats = player:FindFirstChild("leaderstats")
+	return stats and stats:FindFirstChild("Treats") :: NumberValue?
+end
+
+local function syncShop(player: Player)
+	local state = states[player]
+	if state then
+		shopSync:FireClient(player, state.counts)
+	end
+end
+
+-- ============================ PLAYERS ============================
 
 local function onPlayerAdded(player: Player)
 	local stats = Instance.new("Folder")
@@ -22,7 +49,7 @@ local function onPlayerAdded(player: Player)
 	treats.Value = 0
 	treats.Parent = stats
 	stats.Parent = player
-	clickWindows[player] = { windowStart = os.clock(), count = 0 }
+	states[player] = { windowStart = os.clock(), clickCount = 0, counts = {} }
 end
 
 Players.PlayerAdded:Connect(onPlayerAdded)
@@ -31,31 +58,80 @@ for _, player in Players:GetPlayers() do
 end
 
 Players.PlayerRemoving:Connect(function(player)
-	clickWindows[player] = nil
+	states[player] = nil
 end)
 
+-- ============================ CLICKS (Stage 1) ============================
+
 clickEvent.OnServerEvent:Connect(function(player)
-	local stats = player:FindFirstChild("leaderstats")
-	local treats = stats and stats:FindFirstChild("Treats") :: NumberValue?
-	local window = clickWindows[player]
-	if not treats or not window then
+	local treats = getTreats(player)
+	local state = states[player]
+	if not treats or not state then
 		return
 	end
 
-	-- Rolling 1-second rate cap
 	local now = os.clock()
-	if now - window.windowStart >= 1 then
-		window.windowStart = now
-		window.count = 0
+	if now - state.windowStart >= 1 then
+		state.windowStart = now
+		state.clickCount = 0
 	end
-	if window.count >= Config.MaxClicksPerSecond then
+	if state.clickCount >= Config.MaxClicksPerSecond then
 		return
 	end
-	window.count += 1
+	state.clickCount += 1
 
 	local gained = Config.TreatsPerClick
 	treats.Value += gained
 	clickEvent:FireClient(player, gained)
 end)
 
-print("[CatClicker] Server ready — stage 1 (click mechanic)")
+-- ============================ SHOP (Stage 2) ============================
+
+buyEvent.OnServerEvent:Connect(function(player, generatorId)
+	local state = states[player]
+	local treats = getTreats(player)
+	if not state or not treats or type(generatorId) ~= "string" then
+		return
+	end
+	local gen = Config.GeneratorsById[generatorId]
+	if not gen then
+		return
+	end
+
+	local owned = state.counts[generatorId] or 0
+	local cost = Config.CostFor(gen, owned)
+	if treats.Value < cost then
+		return
+	end
+
+	treats.Value -= cost
+	state.counts[generatorId] = owned + 1
+	syncShop(player)
+end)
+
+shopSync.OnServerEvent:Connect(syncShop) -- client asks for its state on load
+
+-- Passive income loop
+task.spawn(function()
+	local TICK = 0.25
+	while true do
+		task.wait(TICK)
+		for player, state in states do
+			local perSecond = 0
+			for _, gen in Config.Generators do
+				local owned = state.counts[gen.id]
+				if owned and owned > 0 then
+					perSecond += gen.rate * owned
+				end
+			end
+			if perSecond > 0 then
+				local treats = getTreats(player)
+				if treats then
+					treats.Value += perSecond * TICK
+				end
+			end
+		end
+	end
+end)
+
+print("[CatClicker] Server ready — stages 1-2 (clicks + shop)")
