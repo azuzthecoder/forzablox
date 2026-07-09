@@ -6,6 +6,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DataStoreService = game:GetService("DataStoreService")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
@@ -40,6 +41,30 @@ boostSync.Parent = ReplicatedStorage
 local offlineNotify = Instance.new("RemoteEvent")
 offlineNotify.Name = "OfflineEarnings"
 offlineNotify.Parent = ReplicatedStorage
+
+local petSync = Instance.new("RemoteEvent")
+petSync.Name = "PetSync"
+petSync.Parent = ReplicatedStorage
+
+local openEggFn = Instance.new("RemoteFunction")
+openEggFn.Name = "OpenEgg"
+openEggFn.Parent = ReplicatedStorage
+
+local equipPetFn = Instance.new("RemoteFunction")
+equipPetFn.Name = "EquipPet"
+equipPetFn.Parent = ReplicatedStorage
+
+local dailyStateFn = Instance.new("RemoteFunction")
+dailyStateFn.Name = "DailyState"
+dailyStateFn.Parent = ReplicatedStorage
+
+local checkInFn = Instance.new("RemoteFunction")
+checkInFn.Name = "CheckIn"
+checkInFn.Parent = ReplicatedStorage
+
+local spinFn = Instance.new("RemoteFunction")
+spinFn.Name = "SpinWheel"
+spinFn.Parent = ReplicatedStorage
 
 local leaderboardSync = Instance.new("RemoteEvent")
 leaderboardSync.Name = "LeaderboardSync"
@@ -83,10 +108,41 @@ type PlayerState = {
 	redeemed: { [string]: boolean },
 	joinedAt: number,
 	playtimeBase: number, -- seconds from previous sessions
+	pets: { [string]: number }, -- petId -> owned count
+	equipped: { string }, -- up to Pets.MaxEquipped petIds
+	pawCoins: number,
+	lastCheckIn: number, -- day number (os.time()/86400)
+	checkInStreak: number,
+	lastSpin: number, -- day number
+	vip: boolean,
 }
 
 local function prestigeBoost(state: PlayerState): number
 	return 1 + state.catPoints * Config.Prestige.BoostPerPoint
+end
+
+local function petBoost(state: PlayerState): number
+	local mult = 1
+	for _, petId in state.equipped do
+		local pet = Config.PetsById[petId]
+		if pet then
+			mult *= pet.mult
+		end
+	end
+	return mult
+end
+
+local function vipBoost(state: PlayerState): number
+	return state.vip and Config.Monetization.VipMultiplier or 1
+end
+
+-- Every permanent multiplier combined (specials handled separately)
+local function permanentBoost(state: PlayerState): number
+	return prestigeBoost(state) * petBoost(state) * vipBoost(state)
+end
+
+local function currentDay(): number
+	return math.floor(os.time() / 86400)
 end
 
 local function boostFor(state: PlayerState, now: number): number
@@ -152,7 +208,29 @@ local function onPlayerAdded(player: Player)
 		redeemed = {},
 		joinedAt = os.clock(),
 		playtimeBase = 0,
+		pets = {},
+		equipped = {},
+		pawCoins = 0,
+		lastCheckIn = 0,
+		checkInStreak = 0,
+		lastSpin = 0,
+		vip = false,
 	}
+	player:SetAttribute("PawCoins", 0)
+
+	-- VIP gamepass check
+	if Config.Monetization.VipGamePassId > 0 then
+		task.spawn(function()
+			local ok, owns = pcall(function()
+				return MarketplaceService:UserOwnsGamePassAsync(player.UserId, Config.Monetization.VipGamePassId)
+			end)
+			local state = states[player]
+			if ok and owns and state then
+				state.vip = true
+				player:SetAttribute("VIP", true)
+			end
+		end)
+	end
 	player:SetAttribute("TotalEarned", 0)
 	player:SetAttribute("Clicks", 0)
 	player:SetAttribute("PerSecond", 0)
@@ -191,7 +269,7 @@ clickEvent.OnServerEvent:Connect(function(player)
 	end
 	state.clickTokens -= 1
 
-	local gained = Config.ClickAmount(state.clickUpgrades) * boostFor(state, now) * prestigeBoost(state)
+	local gained = Config.ClickAmount(state.clickUpgrades) * boostFor(state, now) * permanentBoost(state)
 	treats.Value += gained
 	state.totalEarned += gained
 	state.clicks += 1
@@ -328,7 +406,7 @@ task.spawn(function()
 					perSecond += gen.rate * owned
 				end
 			end
-			perSecond *= prestigeBoost(state)
+			perSecond *= permanentBoost(state)
 			if player:GetAttribute("PerSecond") ~= perSecond then
 				player:SetAttribute("PerSecond", perSecond)
 			end
@@ -355,14 +433,17 @@ rebirthFn.OnServerInvoke = function(player)
 	end
 	local points = math.floor(treats.Value / Config.Prestige.Threshold)
 	if points < 1 then
-		return false, "You need at least 1,000,000 treats to rebirth!"
+		return false, "You need at least 500,000 treats to rebirth!"
 	end
 
+	local coins = points * Config.Prestige.CoinsPerPoint
 	treats.Value = 0
 	state.catPoints += points
+	state.pawCoins += coins
 	player:SetAttribute("CatPoints", state.catPoints)
+	player:SetAttribute("PawCoins", state.pawCoins)
 	task.spawn(savePlayerData, player)
-	return true, points
+	return true, points, coins
 end
 
 -- ============================ CODES ============================
@@ -391,6 +472,212 @@ redeemFn.OnServerInvoke = function(player, code)
 	player:SetAttribute("TotalEarned", state.totalEarned)
 	return true, "+" .. reward.treats .. " treats! Enjoy 🐱"
 end
+
+-- ============================ PETS & EGGS ============================
+
+local function syncPets(player: Player)
+	local state = states[player]
+	if state then
+		petSync:FireClient(player, { pets = state.pets, equipped = state.equipped })
+	end
+end
+
+local petTotalWeight = 0
+for _, pet in Config.Pets.List do
+	petTotalWeight += pet.weight
+end
+
+openEggFn.OnServerInvoke = function(player)
+	local state = states[player]
+	if not state or not state.loaded then
+		return false, "Not ready yet!"
+	end
+	if state.pawCoins < Config.Pets.EggCost then
+		return false, ("You need %d Paw Coins! Rebirth or claim dailies to earn them."):format(Config.Pets.EggCost)
+	end
+
+	state.pawCoins -= Config.Pets.EggCost
+	player:SetAttribute("PawCoins", state.pawCoins)
+
+	local roll = goldenRng:NextNumber(0, petTotalWeight)
+	local hatched = Config.Pets.List[1]
+	for _, pet in Config.Pets.List do
+		roll -= pet.weight
+		if roll <= 0 then
+			hatched = pet
+			break
+		end
+	end
+
+	state.pets[hatched.id] = (state.pets[hatched.id] or 0) + 1
+	-- Auto-equip if there's room
+	if #state.equipped < Config.Pets.MaxEquipped and not table.find(state.equipped, hatched.id) then
+		table.insert(state.equipped, hatched.id)
+	end
+	syncPets(player)
+	task.spawn(savePlayerData, player)
+	return true, hatched.id
+end
+
+equipPetFn.OnServerInvoke = function(player, petId)
+	local state = states[player]
+	if not state or type(petId) ~= "string" or not Config.PetsById[petId] then
+		return false
+	end
+	local index = table.find(state.equipped, petId)
+	if index then
+		table.remove(state.equipped, index)
+	else
+		if not state.pets[petId] or state.pets[petId] < 1 then
+			return false
+		end
+		if #state.equipped >= Config.Pets.MaxEquipped then
+			return false, "Max " .. Config.Pets.MaxEquipped .. " pets equipped!"
+		end
+		table.insert(state.equipped, petId)
+	end
+	syncPets(player)
+	return true
+end
+
+petSync.OnServerEvent:Connect(syncPets) -- client requests its pets on load
+
+-- ============================ DAILY REWARDS ============================
+
+local function applyTimedBoost(player: Player, state: PlayerState, mult: number, duration: number)
+	state.boostMult = mult
+	state.boostEnds = os.clock() + duration
+	boostSync:FireClient(player, "boost", "golden", mult, duration)
+end
+
+dailyStateFn.OnServerInvoke = function(player)
+	local state = states[player]
+	if not state then
+		return nil
+	end
+	local day = currentDay()
+	return {
+		canCheckIn = state.lastCheckIn < day,
+		canSpin = state.lastSpin < day,
+		streak = state.checkInStreak,
+	}
+end
+
+checkInFn.OnServerInvoke = function(player)
+	local state = states[player]
+	if not state or not state.loaded then
+		return false, "Not ready yet!"
+	end
+	local day = currentDay()
+	if state.lastCheckIn >= day then
+		return false, "Already claimed today — come back tomorrow!"
+	end
+	if state.lastCheckIn == day - 1 then
+		state.checkInStreak += 1
+	else
+		state.checkInStreak = 1
+	end
+	state.lastCheckIn = day
+
+	local coins = Config.Daily.CheckInBaseCoins + (state.checkInStreak - 1) * Config.Daily.CheckInStreakBonus
+	state.pawCoins += coins
+	player:SetAttribute("PawCoins", state.pawCoins)
+	task.spawn(savePlayerData, player)
+	return true, coins, state.checkInStreak
+end
+
+local spinTotalWeight = 0
+for _, prize in Config.Daily.SpinPrizes do
+	spinTotalWeight += prize.weight
+end
+
+spinFn.OnServerInvoke = function(player)
+	local state = states[player]
+	local treats = getTreats(player)
+	if not state or not treats or not state.loaded then
+		return false, "Not ready yet!"
+	end
+	local day = currentDay()
+	if state.lastSpin >= day then
+		return false, "Already spun today — come back tomorrow!"
+	end
+	state.lastSpin = day
+
+	local roll = goldenRng:NextNumber(0, spinTotalWeight)
+	local prizeIndex = 1
+	for i, prize in Config.Daily.SpinPrizes do
+		roll -= prize.weight
+		if roll <= 0 then
+			prizeIndex = i
+			break
+		end
+	end
+
+	local prize = Config.Daily.SpinPrizes[prizeIndex] :: any
+	if prize.treats then
+		treats.Value += prize.treats
+		state.totalEarned += prize.treats
+		player:SetAttribute("TotalEarned", state.totalEarned)
+	end
+	if prize.coins then
+		state.pawCoins += prize.coins
+		player:SetAttribute("PawCoins", state.pawCoins)
+	end
+	if prize.boost then
+		applyTimedBoost(player, state, prize.boost, prize.duration)
+	end
+	task.spawn(savePlayerData, player)
+	return true, prizeIndex
+end
+
+-- ============================ ROBUX STORE ============================
+
+local productsById: { [number]: any } = {}
+for _, product in Config.Monetization.Products do
+	if product.id > 0 then
+		productsById[product.id] = product
+	end
+end
+
+MarketplaceService.ProcessReceipt = function(receiptInfo)
+	local product = productsById[receiptInfo.ProductId]
+	local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
+	local state = player and states[player]
+	local treats = player and getTreats(player)
+	if not product or not player or not state or not treats then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+
+	local grant = product.grant
+	if grant.treats then
+		treats.Value += grant.treats
+		state.totalEarned += grant.treats
+		player:SetAttribute("TotalEarned", state.totalEarned)
+	end
+	if grant.coins then
+		state.pawCoins += grant.coins
+		player:SetAttribute("PawCoins", state.pawCoins)
+	end
+	if grant.rebirths then
+		state.catPoints += grant.rebirths
+		state.pawCoins += grant.rebirths * Config.Prestige.CoinsPerPoint
+		player:SetAttribute("CatPoints", state.catPoints)
+		player:SetAttribute("PawCoins", state.pawCoins)
+	end
+	if grant.boost then
+		applyTimedBoost(player, state, grant.boost, grant.duration)
+	end
+	task.spawn(savePlayerData, player)
+	return Enum.ProductPurchaseDecision.PurchaseGranted
+end
+
+MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
+	local state = states[player]
+	if purchased and state and passId == Config.Monetization.VipGamePassId then
+		state.vip = true
+		player:SetAttribute("VIP", true)
+	end
+end)
 
 -- ============================ LEADERBOARD (Stage 5) ============================
 
@@ -538,6 +825,27 @@ loadPlayerData = function(player: Player)
 			end
 		end
 		state.playtimeBase = tonumber(data.playtime) or 0
+		state.pawCoins = math.floor(tonumber(data.pawCoins) or 0)
+		state.lastCheckIn = math.floor(tonumber(data.lastCheckIn) or 0)
+		state.checkInStreak = math.floor(tonumber(data.checkInStreak) or 0)
+		state.lastSpin = math.floor(tonumber(data.lastSpin) or 0)
+		if type(data.pets) == "table" then
+			for id, count in data.pets do
+				if Config.PetsById[id] and type(count) == "number" then
+					state.pets[id] = math.floor(count)
+				end
+			end
+		end
+		if type(data.equipped) == "table" then
+			for _, id in data.equipped do
+				if type(id) == "string" and Config.PetsById[id] and state.pets[id]
+					and #state.equipped < Config.Pets.MaxEquipped then
+					table.insert(state.equipped, id)
+				end
+			end
+		end
+		player:SetAttribute("PawCoins", state.pawCoins)
+		syncPets(player)
 		player:SetAttribute("TotalEarned", state.totalEarned)
 		player:SetAttribute("Clicks", state.clicks)
 		player:SetAttribute("CatPoints", state.catPoints)
@@ -584,6 +892,12 @@ savePlayerData = function(player: Player)
 		redeemed = state.redeemed,
 		playtime = state.playtimeBase + (os.clock() - state.joinedAt),
 		savedAt = os.time(),
+		pets = state.pets,
+		equipped = state.equipped,
+		pawCoins = state.pawCoins,
+		lastCheckIn = state.lastCheckIn,
+		checkInStreak = state.checkInStreak,
+		lastSpin = state.lastSpin,
 	}
 	for attempt = 1, 3 do
 		local ok, err = pcall(function()
@@ -631,6 +945,14 @@ resetFn.OnServerInvoke = function(player)
 	state.joinedAt = os.clock()
 	state.boostMult = 1
 	state.boostEnds = 0
+	state.pets = {}
+	state.equipped = {}
+	state.pawCoins = 0
+	state.lastCheckIn = 0
+	state.checkInStreak = 0
+	state.lastSpin = 0
+	player:SetAttribute("PawCoins", 0)
+	syncPets(player)
 	player:SetAttribute("TotalEarned", 0)
 	player:SetAttribute("Clicks", 0)
 	player:SetAttribute("CatPoints", 0)

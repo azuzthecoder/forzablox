@@ -2,51 +2,64 @@
 -- Cat Clicker global config.
 
 local Config = {
-	TreatsPerClick = 1,
+	TreatsPerClick = 2,
 
-	-- Clicks per second the server accepts. Refills continuously (token
-	-- bucket) so fast clicking slows down smoothly instead of freezing.
+	-- Clicks per second the server accepts (continuous token-bucket refill)
 	MaxClicksPerSecond = 25,
 
-	-- Set to a real meow asset id (Toolbox -> search "cat meow" -> copy id)
-	-- e.g. "rbxassetid://131961136". Fallback is a soft built-in pop.
-	MeowSoundId = "",
+	-- Click sound
+	MeowSoundId = "rbxassetid://120055798442871",
 	FallbackClickSound = "rbxasset://sounds/impact_water.mp3",
-	ClickVolume = 0.35,
+	ClickVolume = 0.5,
+
+	-- ==================== YOUR CAT IMAGES ====================
+	-- Upload each cat picture at create.roblox.com -> Creations ->
+	-- Development Items -> Decals, then paste the ASSET id here as
+	-- "rbxassetid://123456789". Empty = emoji fallback is used.
+	Images = {
+		MainCat = "", -- the fat orange chonker (main clicker cat)
+		LoadingCat = "", -- shown on the loading screen (use the chonker too)
+		Pets = {
+			polite = "", -- white smiling "polite" cat
+			sadcat = "", -- black cat
+			munchkin = "", -- standing orange kitten
+			chonker = "", -- fat orange cat
+		},
+	},
 
 	-- Cost multiplier applied per owned copy of a generator
-	CostGrowth = 1.15,
+	CostGrowth = 1.12,
 
-	-- Treats-per-second generators (Cookie Clicker style)
+	-- Treats-per-second generators (cheaper + juicier)
 	Generators = {
-		{ id = "kitten", name = "Kitten", icon = "🐈", rate = 0.1, baseCost = 15 },
-		{ id = "housecat", name = "House Cat", icon = "🐱", rate = 1, baseCost = 100 },
-		{ id = "cafe", name = "Cat Cafe", icon = "☕", rate = 8, baseCost = 1100 },
-		{ id = "tower", name = "Cat Tree Tower", icon = "🗼", rate = 47, baseCost = 12000 },
-		{ id = "shelter", name = "Cat Shelter", icon = "🏠", rate = 260, baseCost = 130000 },
-		{ id = "farm", name = "Cattery Farm", icon = "🚜", rate = 1400, baseCost = 1400000 },
-		{ id = "temple", name = "Cat Temple", icon = "⛩️", rate = 7800, baseCost = 20000000 },
+		{ id = "kitten", name = "Kitten", icon = "🐈", rate = 0.2, baseCost = 10 },
+		{ id = "housecat", name = "House Cat", icon = "🐱", rate = 1.5, baseCost = 75 },
+		{ id = "cafe", name = "Cat Cafe", icon = "☕", rate = 10, baseCost = 700 },
+		{ id = "tower", name = "Cat Tree Tower", icon = "🗼", rate = 55, baseCost = 8000 },
+		{ id = "shelter", name = "Cat Shelter", icon = "🏠", rate = 300, baseCost = 90000 },
+		{ id = "farm", name = "Cattery Farm", icon = "🚜", rate = 1600, baseCost = 900000 },
+		{ id = "temple", name = "Cat Temple", icon = "⛩️", rate = 9000, baseCost = 12000000 },
 	},
 
-	-- One-time click upgrades. "add" raises base treats per click;
-	-- "mult" multiplies the total afterwards.
+	-- One-time click upgrades (cheaper, and more of them)
 	ClickUpgrades = {
-		{ id = "toebean", name = "Extra Toe Bean", icon = "🐾", cost = 100, add = 1 },
-		{ id = "claws", name = "Sharp Claws", icon = "✂️", cost = 750, add = 2 },
-		{ id = "doublepaws", name = "Double Paws", icon = "🙌", cost = 5000, mult = 2 },
-		{ id = "coffee", name = "Caffeinated Cat", icon = "☕", cost = 50000, mult = 2 },
-		{ id = "titanium", name = "Titanium Beans", icon = "🔩", cost = 250000, add = 25 },
-		{ id = "zoomies", name = "Zoomies Mode", icon = "💨", cost = 2000000, mult = 3 },
-		{ id = "cosmic", name = "Cosmic Whiskers", icon = "🌟", cost = 50000000, mult = 5 },
+		{ id = "toebean", name = "Extra Toe Bean", icon = "🐾", cost = 50, add = 1 },
+		{ id = "claws", name = "Sharp Claws", icon = "✂️", cost = 400, add = 3 },
+		{ id = "laser", name = "Laser Pointer", icon = "🔴", cost = 2000, add = 6 },
+		{ id = "doublepaws", name = "Double Paws", icon = "🙌", cost = 2500, mult = 2 },
+		{ id = "tuna", name = "Tuna Feast", icon = "🐟", cost = 15000, add = 15 },
+		{ id = "coffee", name = "Caffeinated Cat", icon = "☕", cost = 25000, mult = 2 },
+		{ id = "catnip", name = "Catnip Frenzy", icon = "🌿", cost = 100000, mult = 2 },
+		{ id = "titanium", name = "Titanium Beans", icon = "🔩", cost = 120000, add = 50 },
+		{ id = "zoomies", name = "Zoomies Mode", icon = "💨", cost = 800000, mult = 3 },
+		{ id = "cosmic", name = "Cosmic Whiskers", icon = "🌟", cost = 20000000, mult = 5 },
 	},
 
-	-- Special bonus cats that drift across the screen. Weighted spawn:
-	-- higher weight = more common. Boost cats multiply ALL treat gains;
-	-- the Money Cat halves shop prices for a while instead.
+	-- Special bonus cats drifting across the screen
 	SpecialCats = {
-		MinInterval = 25, -- seconds between spawns (random in range)
+		MinInterval = 25,
 		MaxInterval = 70,
-		ClickWindow = 12, -- how long a cat stays on screen
+		ClickWindow = 12,
 		Types = {
 			{ id = "silver", name = "Silver Cat", emoji = "🐱", weight = 45,
 				boost = 3, minDur = 45, maxDur = 75, color = { 198, 204, 215 } },
@@ -59,13 +72,70 @@ local Config = {
 		},
 	},
 
-	-- Prestige / rebirth
+	-- Prestige / rebirth: easier and much stronger
 	Prestige = {
-		Threshold = 1000000, -- treats needed per Cat Point
-		BoostPerPoint = 0.10, -- +10% to ALL treat gains per Cat Point, forever
+		Threshold = 500000, -- treats per Cat Point
+		BoostPerPoint = 0.25, -- +25% to ALL gains per point, forever
+		CoinsPerPoint = 100, -- Paw Coins granted per point (buy eggs!)
 	},
 
-	-- Redeemable codes: CODE -> reward
+	-- ==================== PETS & EGGS ====================
+	-- Paw Coins 🪙 come from rebirths, daily rewards and the spinner.
+	-- Eggs hatch a random meme cat that roams your screen and multiplies
+	-- all treat gains. Equipped multipliers stack (multiply together).
+	Pets = {
+		EggCost = 100, -- Paw Coins per egg
+		MaxEquipped = 3,
+		List = {
+			{ id = "polite", name = "Polite Cat", emoji = "😸", rarity = "Common",
+				weight = 40, mult = 1.10 },
+			{ id = "sadcat", name = "Sad Black Cat", emoji = "🐈‍⬛", rarity = "Rare",
+				weight = 30, mult = 1.25 },
+			{ id = "munchkin", name = "Munchkin Kitten", emoji = "🧡", rarity = "Epic",
+				weight = 20, mult = 1.50 },
+			{ id = "chonker", name = "THE CHONKER", emoji = "🐱", rarity = "Legendary",
+				weight = 10, mult = 2.00 },
+		},
+	},
+
+	RarityColors = {
+		Common = Color3.fromRGB(160, 165, 175),
+		Rare = Color3.fromRGB(80, 150, 255),
+		Epic = Color3.fromRGB(190, 90, 255),
+		Legendary = Color3.fromRGB(255, 178, 44),
+	},
+
+	-- ==================== DAILY REWARDS ====================
+	Daily = {
+		CheckInBaseCoins = 50, -- day 1; +25 more per consecutive day
+		CheckInStreakBonus = 25,
+		SpinPrizes = { -- weighted; the spinner picks one per day
+			{ name = "500 Treats", treats = 500, weight = 24, icon = "🍪" },
+			{ name = "2,500 Treats", treats = 2500, weight = 20, icon = "🍪" },
+			{ name = "10,000 Treats", treats = 10000, weight = 10, icon = "🍪" },
+			{ name = "25 Paw Coins", coins = 25, weight = 20, icon = "🪙" },
+			{ name = "75 Paw Coins", coins = 75, weight = 12, icon = "🪙" },
+			{ name = "200 Paw Coins", coins = 200, weight = 6, icon = "🪙" },
+			{ name = "x3 Boost (2 min)", boost = 3, duration = 120, weight = 6, icon = "🚀" },
+			{ name = "JACKPOT! 500 Coins", coins = 500, weight = 2, icon = "🎰" },
+		},
+	},
+
+	-- ==================== ROBUX STORE ====================
+	-- Create these on create.roblox.com (guide in chat), then paste the ids.
+	Monetization = {
+		VipGamePassId = 0, -- Game Pass: VIP (permanent x2 all gains)
+		VipMultiplier = 2,
+		Products = { -- Developer Products (buy repeatedly)
+			{ key = "treats_small", id = 0, name = "50K Treats", icon = "🍪", grant = { treats = 50000 } },
+			{ key = "treats_big", id = 0, name = "500K Treats", icon = "🍪", grant = { treats = 500000 } },
+			{ key = "coins_small", id = 0, name = "150 Paw Coins", icon = "🪙", grant = { coins = 150 } },
+			{ key = "coins_big", id = 0, name = "1,000 Paw Coins", icon = "🪙", grant = { coins = 1000 } },
+			{ key = "rebirth", id = 0, name = "+1 Rebirth", icon = "🐾", grant = { rebirths = 1 } },
+			{ key = "megaboost", id = 0, name = "x5 Boost (10 min)", icon = "🚀", grant = { boost = 5, duration = 600 } },
+		},
+	},
+
 	Codes = {
 		MEOW = { treats = 100 },
 		ORANGE = { treats = 500 },
@@ -74,8 +144,6 @@ local Config = {
 		MILLIONMEOWS = { treats = 50000 },
 	},
 
-	-- Offline earnings: you keep making treats while away, at OfflineRate
-	-- of your normal per-second, up to OfflineMaxHours.
 	Offline = {
 		Rate = 0.5,
 		MaxHours = 8,
@@ -83,18 +151,18 @@ local Config = {
 
 	-- Warm orange tabby palette 🍊
 	Colors = {
-		Background = Color3.fromRGB(255, 240, 222), -- warm cream
+		Background = Color3.fromRGB(255, 240, 222),
 		Panel = Color3.fromRGB(255, 252, 246),
 		PanelShadow = Color3.fromRGB(245, 205, 165),
-		Pink = Color3.fromRGB(255, 168, 88), -- primary orange
-		PinkDark = Color3.fromRGB(235, 120, 45), -- deep orange
-		CatBody = Color3.fromRGB(233, 148, 72), -- orange tabby fur
-		CatStripe = Color3.fromRGB(205, 115, 45), -- darker tabby stripes
-		CatBelly = Color3.fromRGB(248, 200, 150), -- lighter chest fur
+		Pink = Color3.fromRGB(255, 168, 88),
+		PinkDark = Color3.fromRGB(235, 120, 45),
+		CatBody = Color3.fromRGB(233, 148, 72),
+		CatStripe = Color3.fromRGB(205, 115, 45),
+		CatBelly = Color3.fromRGB(248, 200, 150),
 		CatInnerEar = Color3.fromRGB(240, 150, 130),
 		Text = Color3.fromRGB(115, 70, 40),
 		TextSoft = Color3.fromRGB(185, 140, 105),
-		Accent = Color3.fromRGB(255, 178, 44), -- treat gold
+		Accent = Color3.fromRGB(255, 178, 44),
 	},
 }
 
@@ -113,12 +181,15 @@ for _, catType in Config.SpecialCats.Types do
 	Config.SpecialCatsById[catType.id] = catType
 end
 
--- Price of the next copy given how many are already owned
+Config.PetsById = {}
+for _, pet in Config.Pets.List do
+	Config.PetsById[pet.id] = pet
+end
+
 function Config.CostFor(gen, owned: number): number
 	return math.floor(gen.baseCost * Config.CostGrowth ^ owned + 0.5)
 end
 
--- Treats per click given a set of owned upgrade ids ({ [id] = true })
 function Config.ClickAmount(ownedUpgrades: { [string]: boolean }): number
 	local base = Config.TreatsPerClick
 	local mult = 1

@@ -114,51 +114,133 @@ function Extras.Start()
 	gui.DisplayOrder = 30
 	gui.Parent = player:WaitForChild("PlayerGui")
 
-	-- ============== Rebirth button + confirm ==============
+	-- ============== Rebirth (button always visible) ==============
+	local function fmt(n: number): string
+		if n >= 1e6 then
+			return string.format("%.1fM", n / 1e6)
+		elseif n >= 1e3 then
+			return string.format("%.0fK", n / 1e3)
+		end
+		return tostring(math.floor(n))
+	end
+
 	local rebirthBtn = button(gui, "", {
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -14),
-		Size = UDim2.new(0, 280, 0, 46),
+		Size = UDim2.new(0, 280, 0, 52),
 		BackgroundColor3 = C.PinkDark,
-		Visible = false,
 	})
-
-	local confirmOverlay, confirmPanel = modal(gui, "🐾 Rebirth?", 170)
-	local confirmText = label(confirmPanel, {
-		Position = UDim2.new(0, 20, 0, 44),
-		Size = UDim2.new(1, -40, 0, 56),
-		TextSize = 15,
-		TextWrapped = true,
+	label(rebirthBtn, {
+		Position = UDim2.new(0, 0, 0, 5),
+		Size = UDim2.new(1, 0, 0, 24),
+		TextSize = 18,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		Text = "🐾 REBIRTH",
+	})
+	local rebirthProgress = label(rebirthBtn, {
+		Position = UDim2.new(0, 0, 0, 29),
+		Size = UDim2.new(1, 0, 0, 18),
+		TextSize = 12,
+		TextColor3 = Color3.fromRGB(255, 232, 210),
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Text = "",
 	})
-	local yesBtn = button(confirmPanel, "REBIRTH!", {
-		Position = UDim2.new(0, 20, 1, -56),
-		Size = UDim2.new(0.5, -30, 0, 40),
+
+	local rebirthOverlay, rebirthPanel = modal(gui, "🐾 Rebirth", 300)
+	local pointsLine = label(rebirthPanel, {
+		Position = UDim2.new(0, 20, 0, 46),
+		Size = UDim2.new(1, -40, 0, 24),
+		TextSize = 17,
+		TextColor3 = C.PinkDark,
+		Text = "",
+	})
+	label(rebirthPanel, {
+		Position = UDim2.new(0, 20, 0, 74),
+		Size = UDim2.new(1, -40, 0, 36),
+		TextSize = 13,
+		TextWrapped = true,
+		TextColor3 = C.TextSoft,
+		Text = ("Each Cat Point = +%d%% ALL treats forever, plus %d Paw Coins for eggs. Your cats and upgrades stay!"):format(
+			Config.Prestige.BoostPerPoint * 100, Config.Prestige.CoinsPerPoint),
+	})
+
+	local barBack = Instance.new("Frame")
+	barBack.Position = UDim2.new(0, 20, 0, 122)
+	barBack.Size = UDim2.new(1, -40, 0, 20)
+	barBack.BackgroundColor3 = C.Background
+	barBack.BorderSizePixel = 0
+	local barCorner = Instance.new("UICorner")
+	barCorner.CornerRadius = UDim.new(1, 0)
+	barCorner.Parent = barBack
+	barBack.Parent = rebirthPanel
+	local barFill = Instance.new("Frame")
+	barFill.Size = UDim2.new(0, 0, 1, 0)
+	barFill.BackgroundColor3 = C.Accent
+	barFill.BorderSizePixel = 0
+	local fillCorner = Instance.new("UICorner")
+	fillCorner.CornerRadius = UDim.new(1, 0)
+	fillCorner.Parent = barFill
+	barFill.Parent = barBack
+
+	local progressLine = label(rebirthPanel, {
+		Position = UDim2.new(0, 20, 0, 146),
+		Size = UDim2.new(1, -40, 0, 20),
+		TextSize = 13,
+		Text = "",
+	})
+	local gainLine = label(rebirthPanel, {
+		Position = UDim2.new(0, 20, 0, 172),
+		Size = UDim2.new(1, -40, 0, 24),
+		TextSize = 16,
+		Text = "",
+	})
+	local goBtn = button(rebirthPanel, "REBIRTH NOW!", {
+		Position = UDim2.new(0, 20, 1, -60),
+		Size = UDim2.new(1, -40, 0, 44),
 		BackgroundColor3 = C.PinkDark,
+		TextSize = 18,
 	})
-	local noBtn = button(confirmPanel, "Not yet", {
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -20, 1, -56),
-		Size = UDim2.new(0.5, -30, 0, 40),
-		BackgroundColor3 = C.Background,
-		TextColor3 = C.Text,
-	})
-	noBtn.MouseButton1Click:Connect(function()
-		confirmOverlay.Visible = false
+
+	local treatsNow = 0
+	local function updateRebirth()
+		local threshold = Config.Prestige.Threshold
+		local points = math.floor(treatsNow / threshold)
+		local catPoints = (player:GetAttribute("CatPoints") :: number?) or 0
+
+		rebirthProgress.Text = points >= 1
+			and ("READY!  +%d Cat Point%s"):format(points, points == 1 and "" or "s")
+			or ("%s / %s treats"):format(fmt(treatsNow), fmt(threshold))
+		rebirthBtn.BackgroundColor3 = points >= 1 and C.PinkDark or C.PanelShadow
+
+		pointsLine.Text = ("Cat Points: %d   (+%d%% all treats)"):format(
+			catPoints, catPoints * Config.Prestige.BoostPerPoint * 100)
+		local frac = math.clamp((treatsNow % threshold) / threshold, 0, 1)
+		barFill.Size = UDim2.new(points >= 1 and 1 or frac, 0, 1, 0)
+		progressLine.Text = ("%s / %s treats toward the next point"):format(fmt(treatsNow), fmt(threshold))
+		if points >= 1 then
+			gainLine.Text = ("Rebirth now:  +%d Cat Points,  +%d 🪙"):format(
+				points, points * Config.Prestige.CoinsPerPoint)
+			gainLine.TextColor3 = Color3.fromRGB(90, 170, 100)
+			goBtn.BackgroundColor3 = C.PinkDark
+			goBtn.Text = "REBIRTH NOW!"
+		else
+			gainLine.Text = "Keep clicking — you're not there yet!"
+			gainLine.TextColor3 = C.TextSoft
+			goBtn.BackgroundColor3 = C.PanelShadow
+			goBtn.Text = ("NEED %s MORE TREATS"):format(fmt(Config.Prestige.Threshold - treatsNow))
+		end
+	end
+
+	rebirthBtn.MouseButton1Click:Connect(function()
+		updateRebirth()
+		rebirthOverlay.Visible = true
 	end)
 
-	local pendingPoints = 0
-	rebirthBtn.MouseButton1Click:Connect(function()
-		confirmText.Text = ("Reset your Treats to 0 for %d Cat Point%s? Each gives a permanent +%d%% treats/sec. Your cats and upgrades stay!"):format(
-			pendingPoints, pendingPoints == 1 and "" or "s",
-			Config.Prestige.BoostPerPoint * 100)
-		confirmOverlay.Visible = true
-	end)
-	yesBtn.MouseButton1Click:Connect(function()
-		confirmOverlay.Visible = false
-		local ok, result = rebirthFn:InvokeServer()
+	goBtn.MouseButton1Click:Connect(function()
+		local ok = rebirthFn:InvokeServer()
 		if ok then
-			-- Celebration flash
+			rebirthOverlay.Visible = false
 			local flash = Instance.new("Frame")
 			flash.Size = UDim2.fromScale(1, 1)
 			flash.BackgroundColor3 = C.Accent
@@ -346,20 +428,17 @@ function Extras.Start()
 		end)
 	end)
 
-	-- ============== Rebirth button visibility ==============
+	-- ============== Rebirth progress wiring ==============
 	task.spawn(function()
 		local stats = player:WaitForChild("leaderstats")
 		local treats = stats:WaitForChild("Treats") :: NumberValue
-		local function update()
-			local points = math.floor(treats.Value / Config.Prestige.Threshold)
-			pendingPoints = points
-			rebirthBtn.Visible = points >= 1
-			if points >= 1 then
-				rebirthBtn.Text = ("🐾 REBIRTH: +%d Cat Point%s"):format(points, points == 1 and "" or "s")
-			end
-		end
-		treats.Changed:Connect(update)
-		update()
+		treats.Changed:Connect(function()
+			treatsNow = treats.Value
+			updateRebirth()
+		end)
+		player:GetAttributeChangedSignal("CatPoints"):Connect(updateRebirth)
+		treatsNow = treats.Value
+		updateRebirth()
 	end)
 end
 

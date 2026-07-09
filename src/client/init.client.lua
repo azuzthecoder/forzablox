@@ -144,6 +144,21 @@ label(backdrop, {
 	Text = "click the chonker!",
 })
 
+local coinsLabel = label(backdrop, {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 164),
+	Size = UDim2.new(0, 400, 0, 24),
+	TextSize = 18,
+	TextColor3 = C.Accent,
+	TextXAlignment = Enum.TextXAlignment.Center,
+	Text = "🪙 0 Paw Coins",
+})
+local function updateCoins()
+	coinsLabel.Text = "🪙 " .. formatNumber((player:GetAttribute("PawCoins") :: number?) or 0) .. " Paw Coins"
+end
+player:GetAttributeChangedSignal("PawCoins"):Connect(updateCoins)
+updateCoins()
+
 -- ============================ THE CHONKY CAT ============================
 -- A very round orange tabby, built entirely from rounded frames.
 
@@ -324,6 +339,20 @@ for _, side in { -1, 1 } do
 	end
 end
 
+-- If a real cat picture is configured, use it INSTEAD of the drawn cat.
+-- (Upload your image as a Decal and paste its id into Config.Images.MainCat)
+if Config.Images.MainCat ~= "" then
+	for _, child in cat:GetChildren() do
+		(child :: any).Visible = false
+	end
+	local img = Instance.new("ImageLabel")
+	img.Size = UDim2.fromScale(1, 1)
+	img.BackgroundTransparency = 1
+	img.Image = Config.Images.MainCat
+	img.ScaleType = Enum.ScaleType.Fit
+	img.Parent = cat
+end
+
 -- Idle breathing (pauses briefly while being clicked)
 local lastClick = 0
 task.spawn(function()
@@ -413,8 +442,16 @@ end)
 local function watchTreats()
 	local stats = player:WaitForChild("leaderstats")
 	local treats = stats:WaitForChild("Treats") :: NumberValue
+	local lastPop = 0
 	local function update()
 		treatsLabel.Text = formatNumber(treats.Value) .. " Treats"
+		-- Subtle "pop" as the number climbs (throttled)
+		local now = os.clock()
+		if now - lastPop > 0.35 then
+			lastPop = now
+			treatsLabel.TextSize = 60
+			TweenService:Create(treatsLabel, TweenInfo.new(0.25, Enum.EasingStyle.Back), { TextSize = 56 }):Play()
+		end
 	end
 	treats.Changed:Connect(update)
 	update()
@@ -434,5 +471,14 @@ Stats.Start()
 
 local Extras = require(script.Extras)
 Extras.Start()
+
+local Pets = require(script.Pets)
+Pets.Start()
+
+local Daily = require(script.Daily)
+Daily.Start()
+
+local Store = require(script.Store)
+Store.Start()
 
 print("[CatClicker] Client ready — all systems")
