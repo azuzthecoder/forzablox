@@ -302,6 +302,31 @@ function Extras.Start()
 		infoOverlay.Visible = not infoOverlay.Visible
 	end)
 
+	-- ============== Offline earnings popup ==============
+	local offlineNotify = ReplicatedStorage:WaitForChild("OfflineEarnings") :: RemoteEvent
+	local offlineOverlay, offlinePanel = modal(gui, "😴 Welcome back!", 180)
+	local offlineText = label(offlinePanel, {
+		Position = UDim2.new(0, 20, 0, 48),
+		Size = UDim2.new(1, -40, 0, 66),
+		TextSize = 16,
+		TextWrapped = true,
+		Text = "",
+	})
+	local offlineOk = button(offlinePanel, "NICE! 🐾", {
+		Position = UDim2.new(0, 20, 1, -56),
+		Size = UDim2.new(1, -40, 0, 40),
+	})
+	offlineOk.MouseButton1Click:Connect(function()
+		offlineOverlay.Visible = false
+	end)
+	offlineNotify.OnClientEvent:Connect(function(amount, minutes)
+		if type(amount) == "number" and type(minutes) == "number" then
+			offlineText.Text = ("Your cats kept working while you were away!\n\n+%s treats earned over %d minute%s"):format(
+				tostring(amount), minutes, minutes == 1 and "" or "s")
+			offlineOverlay.Visible = true
+		end
+	end)
+
 	-- ============== Auto-save indicator ==============
 	local savedNotify = ReplicatedStorage:WaitForChild("SavedNotify") :: RemoteEvent
 	local savedLabel = label(gui, {

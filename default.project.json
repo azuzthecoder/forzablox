@@ -2,6 +2,11 @@
   "name": "CatClicker",
   "tree": {
     "$className": "DataModel",
+    "ReplicatedFirst": {
+      "Loading": {
+        "$path": "src/loading"
+      }
+    },
     "ReplicatedStorage": {
       "Shared": {
         "$path": "src/shared"

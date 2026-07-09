@@ -1,6 +1,6 @@
 --!strict
--- Cat Clicker client — Stage 1: big clickable cat, Treats counter,
--- floating "+1" popups and a meow per click. Bright pastel style.
+-- Cat Clicker client: the big chonky orange tabby, Treats counter,
+-- floating "+X" popups, click sound, ambient background life.
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -52,6 +52,9 @@ local function label(parent: Instance, props: { [string]: any }): TextLabel
 end
 
 local function formatNumber(n: number): string
+	if n >= 1e6 then
+		return string.format("%.2f", n / 1e6):gsub("%.?0+$", "") .. "M"
+	end
 	local s = tostring(math.floor(n))
 	while true do
 		local replaced
@@ -71,13 +74,12 @@ gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 gui.Parent = playerGui
 
--- Soft cream backdrop covering the whole screen (it's a UI game!)
 local backdrop = frame(gui, {
 	Size = UDim2.fromScale(1, 1),
 	BackgroundColor3 = C.Background,
 })
 
--- A few decorative pastel bubbles
+-- Decorative pastel bubbles
 for _ = 1, 10 do
 	local size = rng:NextInteger(40, 120)
 	local bubble = frame(backdrop, {
@@ -89,6 +91,30 @@ for _ = 1, 10 do
 	circle(bubble)
 end
 
+-- Ambient drifting treats floating up the screen
+task.spawn(function()
+	local drifts = { "🐾", "🍪", "🧶", "🐟" }
+	while true do
+		task.wait(rng:NextNumber(1.8, 3.2))
+		local drift = label(backdrop, {
+			Position = UDim2.new(rng:NextNumber(0.05, 0.9), 0, 1.05, 0),
+			Size = UDim2.fromOffset(40, 40),
+			TextSize = rng:NextInteger(18, 34),
+			TextTransparency = 0.72,
+			Text = drifts[rng:NextInteger(1, #drifts)],
+		})
+		local lifetime = rng:NextNumber(11, 16)
+		TweenService:Create(drift, TweenInfo.new(lifetime, Enum.EasingStyle.Linear), {
+			Position = drift.Position - UDim2.fromScale(0, 1.15),
+			TextTransparency = 1,
+			Rotation = rng:NextInteger(-40, 40),
+		}):Play()
+		task.delay(lifetime, function()
+			drift:Destroy()
+		end)
+	end
+end)
+
 -- Title + Treats counter
 label(backdrop, {
 	AnchorPoint = Vector2.new(0.5, 0),
@@ -96,6 +122,7 @@ label(backdrop, {
 	Size = UDim2.new(0, 600, 0, 34),
 	TextSize = 30,
 	TextColor3 = C.PinkDark,
+	TextXAlignment = Enum.TextXAlignment.Center,
 	Text = "🐾 Cat Clicker 🐾",
 })
 
@@ -104,6 +131,7 @@ local treatsLabel = label(backdrop, {
 	Position = UDim2.new(0.5, 0, 0, 50),
 	Size = UDim2.new(0, 700, 0, 64),
 	TextSize = 56,
+	TextXAlignment = Enum.TextXAlignment.Center,
 	Text = "0 Treats",
 })
 label(backdrop, {
@@ -112,17 +140,18 @@ label(backdrop, {
 	Size = UDim2.new(0, 500, 0, 22),
 	TextSize = 18,
 	TextColor3 = C.TextSoft,
-	Text = "click the cat!",
+	TextXAlignment = Enum.TextXAlignment.Center,
+	Text = "click the chonker!",
 })
 
--- ============================ THE CAT ============================
--- Built entirely from rounded frames, so no image assets are needed.
+-- ============================ THE CHONKY CAT ============================
+-- A very round orange tabby, built entirely from rounded frames.
 
 local catButton = Instance.new("TextButton")
 catButton.Name = "Cat"
 catButton.AnchorPoint = Vector2.new(0.5, 0.5)
-catButton.Position = UDim2.fromScale(0.5, 0.58)
-catButton.Size = UDim2.fromOffset(300, 300)
+catButton.Position = UDim2.fromScale(0.5, 0.6)
+catButton.Size = UDim2.fromOffset(330, 380)
 catButton.BackgroundTransparency = 1
 catButton.Text = ""
 catButton.Parent = backdrop
@@ -134,110 +163,192 @@ local cat = frame(catButton, {
 	BackgroundTransparency = 1,
 })
 
--- Soft shadow under the cat
+-- Soft shadow
 local shadow = frame(cat, {
 	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, 14),
-	Size = UDim2.new(0.8, 0, 0, 30),
+	Position = UDim2.new(0.5, 0, 1, 12),
+	Size = UDim2.new(0.85, 0, 0, 34),
 	BackgroundColor3 = C.PanelShadow,
-	BackgroundTransparency = 0.5,
+	BackgroundTransparency = 0.45,
 })
 circle(shadow)
 
--- Ears (rotated rounded squares behind the head)
+-- Ears (behind the head)
 for _, side in { -1, 1 } do
 	local ear = frame(cat, {
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5 + side * 0.28, 0.13),
-		Size = UDim2.fromScale(0.3, 0.3),
+		Position = UDim2.fromScale(0.5 + side * 0.21, 0.075),
+		Size = UDim2.fromOffset(74, 74),
 		Rotation = 45,
 		BackgroundColor3 = C.CatBody,
 	})
-	round(ear, 18)
+	round(ear, 16)
 	local inner = frame(ear, {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.55, 0.55),
+		Size = UDim2.fromScale(0.52, 0.52),
 		BackgroundColor3 = C.CatInnerEar,
 	})
-	round(inner, 12)
+	round(inner, 10)
 end
 
--- Head
-local head = frame(cat, {
-	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0.5, 0.55),
-	Size = UDim2.fromScale(0.92, 0.82),
+-- The BODY: big and round like the real chonker
+local body = frame(cat, {
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -4),
+	Size = UDim2.new(0.98, 0, 0.62, 0),
 	BackgroundColor3 = C.CatBody,
 })
-circle(head)
+round(body, 110)
 
--- Eyes
+-- Tabby stripes on the body sides
+for _, side in { -1, 1 } do
+	for i = 0, 2 do
+		local stripe = frame(body, {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5 + side * (0.42 - i * 0.035), 0.3 + i * 0.2),
+			Size = UDim2.fromOffset(46, 13),
+			Rotation = side * (18 - i * 8),
+			BackgroundColor3 = C.CatStripe,
+		})
+		circle(stripe)
+	end
+end
+
+-- Lighter belly fluff
+local belly = frame(body, {
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -10),
+	Size = UDim2.new(0.56, 0, 0.72, 0),
+	BackgroundColor3 = C.CatBelly,
+})
+round(belly, 90)
+
+-- Front paws resting on the belly
+for _, side in { -1, 1 } do
+	local paw = frame(cat, {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5 + side * 0.14, 0, 1, -8),
+		Size = UDim2.fromOffset(56, 40),
+		BackgroundColor3 = C.CatBody,
+	})
+	round(paw, 20)
+	frame(paw, {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -4),
+		Size = UDim2.new(0.7, 0, 0, 8),
+		BackgroundColor3 = C.CatStripe,
+		BackgroundTransparency = 0.55,
+	})
+end
+
+-- The HEAD sits on top of (and slightly into) the body
+local head = frame(cat, {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 8),
+	Size = UDim2.fromOffset(214, 176),
+	BackgroundColor3 = C.CatBody,
+})
+round(head, 88)
+
+-- Head stripes (classic tabby "M")
+for i = -1, 1 do
+	local stripe = frame(head, {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5 + i * 0.16, 0, 0, 6),
+		Size = UDim2.fromOffset(14, 34 - math.abs(i) * 10),
+		BackgroundColor3 = C.CatStripe,
+	})
+	circle(stripe)
+end
+
+-- Eyes: wide-set, a little unimpressed (like the real one)
 for _, side in { -1, 1 } do
 	local eye = frame(head, {
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5 + side * 0.19, 0.42),
-		Size = UDim2.fromOffset(26, 34),
+		Position = UDim2.fromScale(0.5 + side * 0.22, 0.46),
+		Size = UDim2.fromOffset(24, 26),
 		BackgroundColor3 = C.Text,
 	})
 	circle(eye)
 	local shine = frame(eye, {
-		Position = UDim2.fromScale(0.55, 0.12),
-		Size = UDim2.fromScale(0.32, 0.28),
+		Position = UDim2.fromScale(0.5, 0.12),
+		Size = UDim2.fromScale(0.3, 0.28),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 	})
 	circle(shine)
-end
-
--- Blush
-for _, side in { -1, 1 } do
-	local blush = frame(head, {
+	-- sleepy upper eyelid
+	frame(head, {
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5 + side * 0.32, 0.62),
-		Size = UDim2.fromOffset(34, 20),
-		BackgroundColor3 = C.Pink,
-		BackgroundTransparency = 0.35,
+		Position = UDim2.fromScale(0.5 + side * 0.22, 0.40),
+		Size = UDim2.fromOffset(26, 8),
+		BackgroundColor3 = C.CatBody,
 	})
-	circle(blush)
 end
 
--- Nose + mouth
+-- Muzzle, nose and mouth
+local muzzle = frame(head, {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.68),
+	Size = UDim2.fromOffset(74, 48),
+	BackgroundColor3 = C.CatBelly,
+})
+round(muzzle, 26)
 local nose = frame(head, {
 	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0.5, 0.58),
-	Size = UDim2.fromOffset(20, 14),
-	BackgroundColor3 = C.PinkDark,
+	Position = UDim2.fromScale(0.5, 0.6),
+	Size = UDim2.fromOffset(20, 13),
+	BackgroundColor3 = C.CatInnerEar,
 })
 circle(nose)
 label(head, {
 	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0.5, 0.72),
-	Size = UDim2.fromOffset(60, 30),
-	TextSize = 24,
-	TextColor3 = C.Text,
+	Position = UDim2.fromScale(0.5, 0.74),
+	Size = UDim2.fromOffset(60, 26),
+	TextSize = 20,
+	TextXAlignment = Enum.TextXAlignment.Center,
 	Text = "ω",
 })
 
--- Whiskers
+-- Long whiskers
 for _, side in { -1, 1 } do
 	for i = -1, 1 do
 		local whisker = frame(head, {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5 + side * 0.44, 0.58 + i * 0.07),
-			Size = UDim2.fromOffset(52, 3),
-			Rotation = side * i * -8,
-			BackgroundColor3 = C.TextSoft,
+			Position = UDim2.fromScale(0.5 + side * 0.47, 0.62 + i * 0.07),
+			Size = UDim2.fromOffset(66, 3),
+			Rotation = side * i * -7,
+			BackgroundColor3 = Color3.fromRGB(250, 245, 238),
 		})
 		circle(whisker)
 	end
 end
+
+-- Idle breathing (pauses briefly while being clicked)
+local lastClick = 0
+task.spawn(function()
+	while true do
+		if os.clock() - lastClick > 0.6 then
+			TweenService:Create(cat, TweenInfo.new(1.1, Enum.EasingStyle.Sine), {
+				Size = UDim2.fromScale(1.015, 1.03),
+			}):Play()
+			task.wait(1.1)
+			TweenService:Create(cat, TweenInfo.new(1.1, Enum.EasingStyle.Sine), {
+				Size = UDim2.fromScale(1, 1),
+			}):Play()
+			task.wait(1.1)
+		else
+			task.wait(0.3)
+		end
+	end
+end)
 
 -- ============================ SOUND ============================
 
 local meow = Instance.new("Sound")
 meow.Name = "Meow"
 meow.SoundId = Config.MeowSoundId ~= "" and Config.MeowSoundId or Config.FallbackClickSound
-meow.Volume = 0.6
+meow.Volume = Config.ClickVolume
 meow.Parent = gui
 
 -- ============================ CLICKING ============================
@@ -249,11 +360,12 @@ local function popup(amount: number, x: number, y: number)
 	local pop = label(gui, {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromOffset(x + rng:NextInteger(-14, 14), y + rng:NextInteger(-6, 6)),
-		Size = UDim2.fromOffset(120, 36),
+		Size = UDim2.fromOffset(140, 36),
 		TextSize = 28,
 		TextColor3 = C.Accent,
 		TextStrokeColor3 = C.Text,
 		TextStrokeTransparency = 0.75,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Text = "+" .. formatNumber(amount),
 	})
 	TweenService:Create(pop, TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
@@ -266,25 +378,33 @@ local function popup(amount: number, x: number, y: number)
 	end)
 end
 
-local lastClickX, lastClickY = 0, 0
+-- Popups appear instantly using the last server-confirmed gain, so fast
+-- clicking always feels responsive; the server remains authoritative.
+local lastGain = Config.TreatsPerClick
+local lastSend = 0
 
 catButton.MouseButton1Down:Connect(function(x, y)
-	lastClickX, lastClickY = x, y
+	local now = os.clock()
+	if now - lastSend < 1 / Config.MaxClicksPerSecond then
+		return -- match the server's rate so no click gets silently eaten
+	end
+	lastSend = now
+	lastClick = now
 	clickEvent:FireServer()
 
+	popup(lastGain, x, y)
 	meow.PlaybackSpeed = rng:NextNumber(0.92, 1.12)
 	meow:Play()
 
-	TweenService:Create(cat, squishInfo, { Size = UDim2.fromScale(0.9, 0.86) }):Play()
+	TweenService:Create(cat, squishInfo, { Size = UDim2.fromScale(0.92, 0.88) }):Play()
 	task.delay(0.08, function()
 		TweenService:Create(cat, unsquishInfo, { Size = UDim2.fromScale(1, 1) }):Play()
 	end)
 end)
 
--- Popup shows the server-confirmed amount (includes click upgrades)
 clickEvent.OnClientEvent:Connect(function(gained)
 	if type(gained) == "number" then
-		popup(gained, lastClickX, lastClickY)
+		lastGain = gained
 	end
 end)
 
@@ -301,19 +421,17 @@ local function watchTreats()
 end
 task.spawn(watchTreats)
 
--- Stage 2: upgrade shop sidebar
+-- ============================ MODULES ============================
+
 local Shop = require(script.Shop)
 Shop.Start()
 
--- Stage 4: golden cat bonus event
-local GoldenCat = require(script.GoldenCat)
-GoldenCat.Start()
+local SpecialCats = require(script.SpecialCats)
+SpecialCats.Start()
 
--- Stage 5: stats panel + global leaderboard
 local Stats = require(script.Stats)
 Stats.Start()
 
--- Rebirth, codes and info panel
 local Extras = require(script.Extras)
 Extras.Start()
 

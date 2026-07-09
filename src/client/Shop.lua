@@ -16,6 +16,14 @@ local C = Config.Colors
 local counts: { [string]: number } = {}
 local clickUpgrades: { [string]: boolean } = {}
 local treatsValue: NumberValue? = nil
+local discountUntil = 0 -- Money Cat: 50% off while os.clock() < this
+
+local function priceOf(cost: number): (number, boolean)
+	if os.clock() < discountUntil then
+		return math.floor(cost * 0.5), true
+	end
+	return cost, false
+end
 
 type UpgradeCard = {
 	button: TextButton,
@@ -97,8 +105,11 @@ local function refresh()
 		local owned = clickUpgrades[card.upgrade.id] == true
 		card.button.Visible = not owned
 		if not owned then
-			local affordable = treats >= card.upgrade.cost
-			card.costLabel.TextColor3 = affordable and C.PinkDark or C.TextSoft
+			local cost, discounted = priceOf(card.upgrade.cost)
+			local affordable = treats >= cost
+			card.costLabel.Text = "🍪 " .. formatNumber(cost) .. (discounted and "  (50% OFF!)" or "")
+			card.costLabel.TextColor3 = discounted and Color3.fromRGB(90, 170, 100)
+				or (affordable and C.PinkDark or C.TextSoft)
 			card.button.BackgroundColor3 = affordable and C.Panel or C.Background
 			card.button.AutoButtonColor = affordable
 		end
@@ -106,12 +117,13 @@ local function refresh()
 
 	for _, card in cards do
 		local owned = counts[card.gen.id] or 0
-		local cost = Config.CostFor(card.gen, owned)
+		local cost, discounted = priceOf(Config.CostFor(card.gen, owned))
 		local affordable = treats >= cost
 
-		card.costLabel.Text = "🍪 " .. formatNumber(cost)
+		card.costLabel.Text = "🍪 " .. formatNumber(cost) .. (discounted and "  (50% OFF!)" or "")
 		card.ownedLabel.Text = tostring(owned)
-		card.costLabel.TextColor3 = affordable and C.PinkDark or C.TextSoft
+		card.costLabel.TextColor3 = discounted and Color3.fromRGB(90, 170, 100)
+			or (affordable and C.PinkDark or C.TextSoft)
 		card.button.BackgroundColor3 = affordable and C.Panel or C.Background
 		card.button.AutoButtonColor = affordable
 		card.icon.TextTransparency = affordable and 0 or 0.45
@@ -317,6 +329,21 @@ function Shop.Start()
 		end
 	end)
 	shopSync:FireServer() -- request initial state
+
+	-- Money Cat discount: retint prices while active
+	local boostSync = ReplicatedStorage:WaitForChild("BoostSync") :: RemoteEvent
+	boostSync.OnClientEvent:Connect(function(kind, _typeId, _magnitude, duration)
+		if kind == "discount" and type(duration) == "number" then
+			discountUntil = os.clock() + duration
+			refresh()
+			task.spawn(function()
+				while os.clock() < discountUntil do
+					task.wait(1)
+				end
+				refresh() -- prices back to normal
+			end)
+		end
+	end)
 
 	task.spawn(function()
 		local stats = player:WaitForChild("leaderstats")

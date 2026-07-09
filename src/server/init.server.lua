@@ -37,6 +37,10 @@ local boostSync = Instance.new("RemoteEvent")
 boostSync.Name = "BoostSync"
 boostSync.Parent = ReplicatedStorage
 
+local offlineNotify = Instance.new("RemoteEvent")
+offlineNotify.Name = "OfflineEarnings"
+offlineNotify.Parent = ReplicatedStorage
+
 local leaderboardSync = Instance.new("RemoteEvent")
 leaderboardSync.Name = "LeaderboardSync"
 leaderboardSync.Parent = ReplicatedStorage
@@ -60,14 +64,16 @@ savedNotify.Parent = ReplicatedStorage
 local goldenRng = Random.new()
 
 type PlayerState = {
-	windowStart: number,
-	clickCount: number,
+	clickTokens: number, -- token bucket: refills at MaxClicksPerSecond
+	lastRefill: number,
 	counts: { [string]: number }, -- generatorId -> owned
 	clickUpgrades: { [string]: boolean }, -- upgradeId -> owned
 	nextGoldenAt: number,
 	goldenOfferExpires: number?,
+	goldenOfferType: string?,
 	boostMult: number,
 	boostEnds: number,
+	discountEnds: number, -- Money Cat: half-price shop until this time
 	totalEarned: number,
 	clicks: number,
 	loaded: boolean, -- save data applied (or confirmed new player)
@@ -85,6 +91,13 @@ end
 
 local function boostFor(state: PlayerState, now: number): number
 	return now < state.boostEnds and state.boostMult or 1
+end
+
+local function discountedCost(state: PlayerState, cost: number): number
+	if os.clock() < state.discountEnds then
+		return math.floor(cost * 0.5)
+	end
+	return cost
 end
 local states: { [Player]: PlayerState } = {}
 
@@ -119,15 +132,17 @@ local function onPlayerAdded(player: Player)
 	treats.Parent = stats
 	stats.Parent = player
 	states[player] = {
-		windowStart = os.clock(),
-		clickCount = 0,
+		clickTokens = Config.MaxClicksPerSecond,
+		lastRefill = os.clock(),
 		counts = {},
 		clickUpgrades = {},
 		nextGoldenAt = os.clock()
-			+ goldenRng:NextNumber(Config.GoldenCat.MinInterval, Config.GoldenCat.MaxInterval),
+			+ goldenRng:NextNumber(Config.SpecialCats.MinInterval, Config.SpecialCats.MaxInterval),
 		goldenOfferExpires = nil,
+		goldenOfferType = nil,
 		boostMult = 1,
 		boostEnds = 0,
+		discountEnds = 0,
 		totalEarned = 0,
 		clicks = 0,
 		loaded = false,
@@ -165,17 +180,18 @@ clickEvent.OnServerEvent:Connect(function(player)
 		return
 	end
 
+	-- Token bucket: refills continuously, so overshooting the cap just
+	-- skips single clicks instead of causing a multi-second dead window.
 	local now = os.clock()
-	if now - state.windowStart >= 1 then
-		state.windowStart = now
-		state.clickCount = 0
-	end
-	if state.clickCount >= Config.MaxClicksPerSecond then
+	state.clickTokens = math.min(Config.MaxClicksPerSecond,
+		state.clickTokens + (now - state.lastRefill) * Config.MaxClicksPerSecond)
+	state.lastRefill = now
+	if state.clickTokens < 1 then
 		return
 	end
-	state.clickCount += 1
+	state.clickTokens -= 1
 
-	local gained = Config.ClickAmount(state.clickUpgrades) * boostFor(state, now)
+	local gained = Config.ClickAmount(state.clickUpgrades) * boostFor(state, now) * prestigeBoost(state)
 	treats.Value += gained
 	state.totalEarned += gained
 	state.clicks += 1
@@ -184,7 +200,23 @@ clickEvent.OnServerEvent:Connect(function(player)
 	clickEvent:FireClient(player, gained)
 end)
 
--- ============================ GOLDEN CAT (Stage 4) ============================
+-- ============================ SPECIAL CATS ============================
+
+local totalWeight = 0
+for _, catType in Config.SpecialCats.Types do
+	totalWeight += catType.weight
+end
+
+local function pickCatType(): any
+	local roll = goldenRng:NextNumber(0, totalWeight)
+	for _, catType in Config.SpecialCats.Types do
+		roll -= catType.weight
+		if roll <= 0 then
+			return catType
+		end
+	end
+	return Config.SpecialCats.Types[1]
+end
 
 goldenClick.OnServerEvent:Connect(function(player)
 	local state = states[player]
@@ -193,17 +225,27 @@ goldenClick.OnServerEvent:Connect(function(player)
 	end
 	local now = os.clock()
 	if not state.goldenOfferExpires or now > state.goldenOfferExpires :: number then
-		return -- no golden cat was live; ignore
+		return -- no special cat was live; ignore
 	end
+	local catType = Config.SpecialCatsById[state.goldenOfferType or ""]
 	state.goldenOfferExpires = nil
+	state.goldenOfferType = nil
+	if not catType then
+		return
+	end
 
-	local duration = goldenRng:NextNumber(Config.GoldenCat.MinDuration, Config.GoldenCat.MaxDuration)
-	state.boostMult = Config.GoldenCat.Multiplier
-	state.boostEnds = now + duration
-	boostSync:FireClient(player, Config.GoldenCat.Multiplier, duration)
+	if catType.discount then
+		state.discountEnds = now + catType.duration
+		boostSync:FireClient(player, "discount", catType.id, 0.5, catType.duration)
+	else
+		local duration = goldenRng:NextNumber(catType.minDur, catType.maxDur)
+		state.boostMult = catType.boost
+		state.boostEnds = now + duration
+		boostSync:FireClient(player, "boost", catType.id, catType.boost, duration)
+	end
 end)
 
--- Spawner: offers each player a golden cat on their own random schedule
+-- Spawner: offers each player a random special cat on their own schedule
 task.spawn(function()
 	while true do
 		task.wait(1)
@@ -211,12 +253,15 @@ task.spawn(function()
 		for player, state in states do
 			if state.goldenOfferExpires and now > state.goldenOfferExpires :: number then
 				state.goldenOfferExpires = nil
+				state.goldenOfferType = nil
 			end
 			if not state.goldenOfferExpires and now >= state.nextGoldenAt then
-				state.goldenOfferExpires = now + Config.GoldenCat.ClickWindow
-				state.nextGoldenAt = now + Config.GoldenCat.MaxDuration
-					+ goldenRng:NextNumber(Config.GoldenCat.MinInterval, Config.GoldenCat.MaxInterval)
-				goldenOffer:FireClient(player, Config.GoldenCat.ClickWindow)
+				local catType = pickCatType()
+				state.goldenOfferExpires = now + Config.SpecialCats.ClickWindow
+				state.goldenOfferType = catType.id
+				state.nextGoldenAt = now + Config.SpecialCats.ClickWindow
+					+ goldenRng:NextNumber(Config.SpecialCats.MinInterval, Config.SpecialCats.MaxInterval)
+				goldenOffer:FireClient(player, catType.id, Config.SpecialCats.ClickWindow)
 			end
 		end
 	end
@@ -234,11 +279,12 @@ buyClickUpgrade.OnServerEvent:Connect(function(player, upgradeId)
 	if not upgrade or state.clickUpgrades[upgradeId] then
 		return
 	end
-	if treats.Value < upgrade.cost then
+	local cost = discountedCost(state, upgrade.cost)
+	if treats.Value < cost then
 		return
 	end
 
-	treats.Value -= upgrade.cost
+	treats.Value -= cost
 	state.clickUpgrades[upgradeId] = true
 	syncShop(player)
 end)
@@ -257,7 +303,7 @@ buyEvent.OnServerEvent:Connect(function(player, generatorId)
 	end
 
 	local owned = state.counts[generatorId] or 0
-	local cost = Config.CostFor(gen, owned)
+	local cost = discountedCost(state, Config.CostFor(gen, owned))
 	if treats.Value < cost then
 		return
 	end
@@ -497,6 +543,28 @@ loadPlayerData = function(player: Player)
 		player:SetAttribute("CatPoints", state.catPoints)
 		player:SetAttribute("PlaytimeBase", state.playtimeBase)
 		syncShop(player)
+
+		-- Offline earnings: pay out passive income for time away
+		local savedAt = tonumber(data.savedAt)
+		if savedAt and treats then
+			local away = math.clamp(os.time() - savedAt, 0, Config.Offline.MaxHours * 3600)
+			local perSecond = 0
+			for _, gen in Config.Generators do
+				perSecond += gen.rate * (state.counts[gen.id] or 0)
+			end
+			local offline = perSecond * prestigeBoost(state) * Config.Offline.Rate * away
+			if offline >= 1 then
+				treats.Value += offline
+				state.totalEarned += offline
+				player:SetAttribute("TotalEarned", state.totalEarned)
+				-- Small delay so the client UI is listening before we fire
+				task.delay(4, function()
+					if player.Parent then
+						offlineNotify:FireClient(player, math.floor(offline), math.floor(away / 60))
+					end
+				end)
+			end
+		end
 	end
 end
 
@@ -515,6 +583,7 @@ savePlayerData = function(player: Player)
 		catPoints = state.catPoints,
 		redeemed = state.redeemed,
 		playtime = state.playtimeBase + (os.clock() - state.joinedAt),
+		savedAt = os.time(),
 	}
 	for attempt = 1, 3 do
 		local ok, err = pcall(function()
