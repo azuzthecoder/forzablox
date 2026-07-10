@@ -4,7 +4,7 @@
 -- PASTE YOUR CHONKER IMAGE ID BELOW (upload the orange cat picture as a
 -- Decal on create.roblox.com, then use its asset id). Until it's set, a
 -- cute drawn cat face shows instead.
-local CAT_IMAGE = "" -- e.g. "rbxassetid://123456789"
+local CAT_IMAGE = "rbxassetid://82591414328650" -- the chonker
 
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local TweenService = game:GetService("TweenService")

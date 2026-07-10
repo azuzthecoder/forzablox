@@ -437,6 +437,7 @@ rebirthFn.OnServerInvoke = function(player)
 	end
 
 	local coins = points * Config.Prestige.CoinsPerPoint
+		* (state.vip and Config.Monetization.VipCoinMultiplier or 1)
 	treats.Value = 0
 	state.catPoints += points
 	state.pawCoins += coins
@@ -579,7 +580,8 @@ checkInFn.OnServerInvoke = function(player)
 	end
 	state.lastCheckIn = day
 
-	local coins = Config.Daily.CheckInBaseCoins + (state.checkInStreak - 1) * Config.Daily.CheckInStreakBonus
+	local coins = (Config.Daily.CheckInBaseCoins + (state.checkInStreak - 1) * Config.Daily.CheckInStreakBonus)
+		* (state.vip and Config.Monetization.VipCoinMultiplier or 1)
 	state.pawCoins += coins
 	player:SetAttribute("PawCoins", state.pawCoins)
 	task.spawn(savePlayerData, player)
@@ -620,7 +622,7 @@ spinFn.OnServerInvoke = function(player)
 		player:SetAttribute("TotalEarned", state.totalEarned)
 	end
 	if prize.coins then
-		state.pawCoins += prize.coins
+		state.pawCoins += prize.coins * (state.vip and Config.Monetization.VipCoinMultiplier or 1)
 		player:SetAttribute("PawCoins", state.pawCoins)
 	end
 	if prize.boost then
@@ -860,7 +862,8 @@ loadPlayerData = function(player: Player)
 			for _, gen in Config.Generators do
 				perSecond += gen.rate * (state.counts[gen.id] or 0)
 			end
-			local offline = perSecond * prestigeBoost(state) * Config.Offline.Rate * away
+			local offlineRate = state.vip and Config.Monetization.VipOfflineRate or Config.Offline.Rate
+			local offline = perSecond * prestigeBoost(state) * offlineRate * away
 			if offline >= 1 then
 				treats.Value += offline
 				state.totalEarned += offline

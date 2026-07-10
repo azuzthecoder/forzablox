@@ -17,13 +17,13 @@ local Config = {
 	-- Development Items -> Decals, then paste the ASSET id here as
 	-- "rbxassetid://123456789". Empty = emoji fallback is used.
 	Images = {
-		MainCat = "", -- the fat orange chonker (main clicker cat)
-		LoadingCat = "", -- shown on the loading screen (use the chonker too)
+		MainCat = "rbxassetid://82591414328650", -- the fat orange chonker (main clicker cat)
+		LoadingCat = "rbxassetid://82591414328650", -- loading screen
 		Pets = {
-			polite = "", -- white smiling "polite" cat
-			sadcat = "", -- black cat
-			munchkin = "", -- standing orange kitten
-			chonker = "", -- fat orange cat
+			polite = "rbxassetid://117495846657473", -- white smiling "polite" cat
+			sadcat = "rbxassetid://105896381335508", -- black cat
+			munchkin = "rbxassetid://133446695623833", -- standing orange kitten
+			chonker = "rbxassetid://82591414328650", -- fat orange cat
 		},
 	},
 
@@ -124,15 +124,17 @@ local Config = {
 	-- ==================== ROBUX STORE ====================
 	-- Create these on create.roblox.com (guide in chat), then paste the ids.
 	Monetization = {
-		VipGamePassId = 0, -- Game Pass: VIP (permanent x2 all gains)
-		VipMultiplier = 2,
-		Products = { -- Developer Products (buy repeatedly)
-			{ key = "treats_small", id = 0, name = "50K Treats", icon = "🍪", grant = { treats = 50000 } },
-			{ key = "treats_big", id = 0, name = "500K Treats", icon = "🍪", grant = { treats = 500000 } },
-			{ key = "coins_small", id = 0, name = "150 Paw Coins", icon = "🪙", grant = { coins = 150 } },
-			{ key = "coins_big", id = 0, name = "1,000 Paw Coins", icon = "🪙", grant = { coins = 1000 } },
-			{ key = "rebirth", id = 0, name = "+1 Rebirth", icon = "🐾", grant = { rebirths = 1 } },
-			{ key = "megaboost", id = 0, name = "x5 Boost (10 min)", icon = "🚀", grant = { boost = 5, duration = 600 } },
+		VipGamePassId = 1906188783, -- Game Pass: VIP (permanent perks below)
+		VipMultiplier = 3, -- x3 ALL treat gains
+		VipCoinMultiplier = 2, -- x2 Paw Coins from rebirths, check-ins & spins
+		VipOfflineRate = 1.0, -- VIPs earn 100% while offline (others 50%)
+		Products = { -- Developer Products (repeatable purchases)
+			{ key = "treats_small", id = 3609011291, name = "50K Treats", icon = "🍪", grant = { treats = 50000 } },
+			{ key = "treats_big", id = 3609011901, name = "500K Treats", icon = "🍪", grant = { treats = 500000 } },
+			{ key = "coins_small", id = 3609012533, name = "150 Paw Coins", icon = "🪙", grant = { coins = 150 } },
+			{ key = "coins_big", id = 3609012695, name = "1,000 Paw Coins", icon = "🪙", grant = { coins = 1000 } },
+			{ key = "rebirth", id = 3609012863, name = "+1 Rebirth", icon = "🐾", grant = { rebirths = 1 } },
+			{ key = "megaboost", id = 3609012955, name = "x5 Boost (10 min)", icon = "🚀", grant = { boost = 5, duration = 600 } },
 		},
 	},
 
