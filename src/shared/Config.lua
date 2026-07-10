@@ -4,8 +4,9 @@
 local Config = {
 	TreatsPerClick = 2,
 
-	-- Clicks per second the server accepts (continuous token-bucket refill)
-	MaxClicksPerSecond = 25,
+	-- Clicks per second the server accepts (continuous token-bucket refill).
+	-- 12/s is above what fingers do on mobile but kneecaps autoclickers.
+	MaxClicksPerSecond = 12,
 
 	-- Click sound
 	MeowSoundId = "rbxassetid://120055798442871",
@@ -17,20 +18,20 @@ local Config = {
 	-- Development Items -> Decals, then paste the ASSET id here as
 	-- "rbxassetid://123456789". Empty = emoji fallback is used.
 	Images = {
-		MainCat = "rbxassetid://82591414328650", -- the fat orange chonker (main clicker cat)
-		LoadingCat = "rbxassetid://82591414328650", -- loading screen
+		MainCat = "rbxassetid://117495846657473", -- the fat orange chonker (main clicker cat)
+		LoadingCat = "rbxassetid://117495846657473", -- loading screen
 		Pets = {
-			polite = "rbxassetid://117495846657473", -- white smiling "polite" cat
-			sadcat = "rbxassetid://105896381335508", -- black cat
-			munchkin = "rbxassetid://133446695623833", -- standing orange kitten
-			chonker = "rbxassetid://82591414328650", -- fat orange cat
+			polite = "rbxassetid://105896381335508", -- white smiling "polite" cat
+			sadcat = "rbxassetid://133446695623833", -- black cat
+			munchkin = "rbxassetid://82591414328650", -- standing orange kitten
+			chonker = "rbxassetid://117495846657473", -- fat orange cat
 		},
 	},
 
 	-- Cost multiplier applied per owned copy of a generator
-	CostGrowth = 1.12,
+	CostGrowth = 1.14,
 
-	-- Treats-per-second generators (cheaper + juicier)
+	-- Treats-per-second generators
 	Generators = {
 		{ id = "kitten", name = "Kitten", icon = "🐈", rate = 0.2, baseCost = 10 },
 		{ id = "housecat", name = "House Cat", icon = "🐱", rate = 1.5, baseCost = 75 },
@@ -39,9 +40,11 @@ local Config = {
 		{ id = "shelter", name = "Cat Shelter", icon = "🏠", rate = 300, baseCost = 90000 },
 		{ id = "farm", name = "Cattery Farm", icon = "🚜", rate = 1600, baseCost = 900000 },
 		{ id = "temple", name = "Cat Temple", icon = "⛩️", rate = 9000, baseCost = 12000000 },
+		{ id = "station", name = "Cat Space Station", icon = "🛸", rate = 52000, baseCost = 180000000 },
+		{ id = "dimension", name = "Catnip Dimension", icon = "🌌", rate = 310000, baseCost = 2500000000 },
 	},
 
-	-- One-time click upgrades (cheaper, and more of them)
+	-- One-time click upgrades (a long ladder so there's always a next goal)
 	ClickUpgrades = {
 		{ id = "toebean", name = "Extra Toe Bean", icon = "🐾", cost = 50, add = 1 },
 		{ id = "claws", name = "Sharp Claws", icon = "✂️", cost = 400, add = 3 },
@@ -52,7 +55,11 @@ local Config = {
 		{ id = "catnip", name = "Catnip Frenzy", icon = "🌿", cost = 100000, mult = 2 },
 		{ id = "titanium", name = "Titanium Beans", icon = "🔩", cost = 120000, add = 50 },
 		{ id = "zoomies", name = "Zoomies Mode", icon = "💨", cost = 800000, mult = 3 },
+		{ id = "goldpaw", name = "Golden Paws", icon = "🏆", cost = 5000000, add = 250 },
 		{ id = "cosmic", name = "Cosmic Whiskers", icon = "🌟", cost = 20000000, mult = 5 },
+		{ id = "thunder", name = "Thunder Claws", icon = "⚡", cost = 150000000, mult = 3 },
+		{ id = "galaxy", name = "Galaxy Fur", icon = "🌌", cost = 1000000000, add = 5000 },
+		{ id = "godcat", name = "GOD CAT MODE", icon = "😼", cost = 10000000000, mult = 10 },
 	},
 
 	-- Special bonus cats drifting across the screen
@@ -85,7 +92,7 @@ local Config = {
 	-- all treat gains. Equipped multipliers stack (multiply together).
 	Pets = {
 		EggCost = 100, -- Paw Coins per egg
-		MaxEquipped = 3,
+		MaxEquipped = 10, -- duplicates allowed — stack those chonkers!
 		List = {
 			{ id = "polite", name = "Polite Cat", emoji = "😸", rarity = "Common",
 				weight = 40, mult = 1.10 },
@@ -151,6 +158,24 @@ local Config = {
 		MaxHours = 8,
 	},
 
+	-- ==================== MUTATION EVENTS ====================
+	-- Global world events that restyle the whole screen and buff everyone.
+	Events = {
+		MinInterval = 150, -- seconds between events (random in range)
+		MaxInterval = 300,
+		Types = {
+			{ id = "acidrain", name = "ACID RAIN", emoji = "☢️", duration = 75,
+				allMult = 2, color = { 120, 235, 90 },
+				desc = "x2 ALL treats while it pours!" },
+			{ id = "nightfall", name = "NIGHTFALL", emoji = "🌙", duration = 75,
+				allMult = 2.5, color = { 90, 90, 200 },
+				desc = "x2.5 ALL treats under the moon!" },
+			{ id = "stars", name = "SHOOTING STARS", emoji = "🌠", duration = 60,
+				allMult = 1.5, starShower = true, color = { 255, 220, 120 },
+				desc = "x1.5 treats + special cats raining!" },
+		},
+	},
+
 	-- Warm orange tabby palette 🍊
 	Colors = {
 		Background = Color3.fromRGB(255, 240, 222),
@@ -186,6 +211,11 @@ end
 Config.PetsById = {}
 for _, pet in Config.Pets.List do
 	Config.PetsById[pet.id] = pet
+end
+
+Config.EventsById = {}
+for _, event in Config.Events.Types do
+	Config.EventsById[event.id] = event
 end
 
 function Config.CostFor(gen, owned: number): number

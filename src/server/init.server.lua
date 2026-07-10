@@ -66,6 +66,10 @@ local spinFn = Instance.new("RemoteFunction")
 spinFn.Name = "SpinWheel"
 spinFn.Parent = ReplicatedStorage
 
+local globalEvent = Instance.new("RemoteEvent")
+globalEvent.Name = "GlobalEvent"
+globalEvent.Parent = ReplicatedStorage
+
 local leaderboardSync = Instance.new("RemoteEvent")
 leaderboardSync.Name = "LeaderboardSync"
 leaderboardSync.Parent = ReplicatedStorage
@@ -143,6 +147,17 @@ end
 
 local function currentDay(): number
 	return math.floor(os.time() / 86400)
+end
+
+-- Active global mutation event (nil when calm)
+local activeEvent: any = nil
+local activeEventEnds = 0
+
+local function eventMult(): number
+	if activeEvent and os.clock() < activeEventEnds then
+		return activeEvent.allMult or 1
+	end
+	return 1
 end
 
 local function boostFor(state: PlayerState, now: number): number
@@ -269,7 +284,8 @@ clickEvent.OnServerEvent:Connect(function(player)
 	end
 	state.clickTokens -= 1
 
-	local gained = Config.ClickAmount(state.clickUpgrades) * boostFor(state, now) * permanentBoost(state)
+	local gained = Config.ClickAmount(state.clickUpgrades) * boostFor(state, now)
+		* permanentBoost(state) * eventMult()
 	treats.Value += gained
 	state.totalEarned += gained
 	state.clicks += 1
@@ -413,7 +429,7 @@ task.spawn(function()
 			if perSecond > 0 then
 				local treats = getTreats(player)
 				if treats then
-					local earned = perSecond * TICK * boostFor(state, os.clock())
+					local earned = perSecond * TICK * boostFor(state, os.clock()) * eventMult()
 					treats.Value += earned
 					state.totalEarned += earned
 					player:SetAttribute("TotalEarned", state.totalEarned)
@@ -520,17 +536,28 @@ openEggFn.OnServerInvoke = function(player)
 	return true, hatched.id
 end
 
-equipPetFn.OnServerInvoke = function(player, petId)
+-- action: "add" equips one copy, "remove" unequips one copy.
+-- Duplicates are allowed, capped by how many copies the player owns.
+equipPetFn.OnServerInvoke = function(player, petId, action)
 	local state = states[player]
 	if not state or type(petId) ~= "string" or not Config.PetsById[petId] then
 		return false
 	end
-	local index = table.find(state.equipped, petId)
-	if index then
-		table.remove(state.equipped, index)
+	if action == "remove" then
+		local index = table.find(state.equipped, petId)
+		if index then
+			table.remove(state.equipped, index)
+		end
 	else
-		if not state.pets[petId] or state.pets[petId] < 1 then
-			return false
+		local owned = state.pets[petId] or 0
+		local equippedCopies = 0
+		for _, id in state.equipped do
+			if id == petId then
+				equippedCopies += 1
+			end
+		end
+		if equippedCopies >= owned then
+			return false, "You don't own another copy — open more eggs!"
 		end
 		if #state.equipped >= Config.Pets.MaxEquipped then
 			return false, "Max " .. Config.Pets.MaxEquipped .. " pets equipped!"
@@ -631,6 +658,45 @@ spinFn.OnServerInvoke = function(player)
 	task.spawn(savePlayerData, player)
 	return true, prizeIndex
 end
+
+-- ============================ MUTATION EVENTS ============================
+
+-- Late joiners ask what's happening right now
+globalEvent.OnServerEvent:Connect(function(player)
+	if activeEvent and os.clock() < activeEventEnds then
+		globalEvent:FireClient(player, activeEvent.id, activeEventEnds - os.clock())
+	end
+end)
+
+task.spawn(function()
+	while true do
+		task.wait(goldenRng:NextNumber(Config.Events.MinInterval, Config.Events.MaxInterval))
+		local event = Config.Events.Types[goldenRng:NextInteger(1, #Config.Events.Types)]
+		activeEvent = event
+		activeEventEnds = os.clock() + event.duration
+		globalEvent:FireAllClients(event.id, event.duration)
+
+		-- Shooting stars: shower everyone with special cats while it lasts
+		if event.starShower then
+			task.spawn(function()
+				while os.clock() < activeEventEnds do
+					for player, state in states do
+						if not state.goldenOfferExpires then
+							local catType = pickCatType()
+							state.goldenOfferExpires = os.clock() + Config.SpecialCats.ClickWindow
+							state.goldenOfferType = catType.id
+							goldenOffer:FireClient(player, catType.id, Config.SpecialCats.ClickWindow)
+						end
+					end
+					task.wait(15)
+				end
+			end)
+		end
+
+		task.wait(event.duration)
+		activeEvent = nil
+	end
+end)
 
 -- ============================ ROBUX STORE ============================
 
@@ -839,9 +905,12 @@ loadPlayerData = function(player: Player)
 			end
 		end
 		if type(data.equipped) == "table" then
+			local tally: { [string]: number } = {}
 			for _, id in data.equipped do
-				if type(id) == "string" and Config.PetsById[id] and state.pets[id]
+				if type(id) == "string" and Config.PetsById[id]
+					and (tally[id] or 0) < (state.pets[id] or 0)
 					and #state.equipped < Config.Pets.MaxEquipped then
+					tally[id] = (tally[id] or 0) + 1
 					table.insert(state.equipped, id)
 				end
 			end

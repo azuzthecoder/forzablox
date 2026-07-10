@@ -57,13 +57,40 @@ function Store.Start()
 	gui.DisplayOrder = 25
 	gui.Parent = player:WaitForChild("PlayerGui")
 
-	local toggle = button(gui, "💎", {
-		Position = UDim2.new(0, 12, 0, 462),
-		Size = UDim2.new(0, 46, 0, 46),
-		TextSize = 22,
-		BackgroundColor3 = Color3.fromRGB(120, 190, 255),
+	local toggle = button(gui, "", {
+		Position = UDim2.new(0, 12, 0, 482),
+		Size = UDim2.new(0, 158, 0, 58),
+		BackgroundColor3 = C.Panel,
 	})
-	round(toggle, 0)
+	round(toggle, 20)
+	local toggleStroke = Instance.new("UIStroke")
+	toggleStroke.Color = Color3.fromRGB(120, 190, 255)
+	toggleStroke.Thickness = 3
+	toggleStroke.Parent = toggle
+	local toggleText = label(toggle, {
+		Size = UDim2.fromScale(1, 1),
+		TextSize = 22,
+		TextColor3 = Color3.fromRGB(70, 140, 220),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		Text = "💎 STORE",
+	})
+	local toggleTextStroke = Instance.new("UIStroke")
+	toggleTextStroke.Color = Color3.new(1, 1, 1)
+	toggleTextStroke.Thickness = 1.5
+	toggleTextStroke.Parent = toggleText
+	task.spawn(function()
+		task.wait(1) -- offset the bob from the other bubbles
+		while toggle.Parent do
+			TweenService:Create(toggle, TweenInfo.new(1.4, Enum.EasingStyle.Sine), {
+				Position = UDim2.new(0, 12, 0, 488),
+			}):Play()
+			task.wait(1.4)
+			TweenService:Create(toggle, TweenInfo.new(1.4, Enum.EasingStyle.Sine), {
+				Position = UDim2.new(0, 12, 0, 482),
+			}):Play()
+			task.wait(1.4)
+		end
+	end)
 
 	local panel = Instance.new("Frame")
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)

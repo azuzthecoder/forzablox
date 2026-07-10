@@ -115,16 +115,20 @@ task.spawn(function()
 	end
 end)
 
--- Title + Treats counter
-label(backdrop, {
+-- Title + Treats counter (bubble style)
+local titleLabel = label(backdrop, {
 	AnchorPoint = Vector2.new(0.5, 0),
 	Position = UDim2.new(0.5, 0, 0, 14),
 	Size = UDim2.new(0, 600, 0, 34),
-	TextSize = 30,
+	TextSize = 32,
 	TextColor3 = C.PinkDark,
 	TextXAlignment = Enum.TextXAlignment.Center,
 	Text = "🐾 Cat Clicker 🐾",
 })
+local titleStroke = Instance.new("UIStroke")
+titleStroke.Color = Color3.new(1, 1, 1)
+titleStroke.Thickness = 2.5
+titleStroke.Parent = titleLabel
 
 local treatsLabel = label(backdrop, {
 	AnchorPoint = Vector2.new(0.5, 0),
@@ -134,16 +138,6 @@ local treatsLabel = label(backdrop, {
 	TextXAlignment = Enum.TextXAlignment.Center,
 	Text = "0 Treats",
 })
-label(backdrop, {
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 116),
-	Size = UDim2.new(0, 500, 0, 22),
-	TextSize = 18,
-	TextColor3 = C.TextSoft,
-	TextXAlignment = Enum.TextXAlignment.Center,
-	Text = "click the chonker!",
-})
-
 local coinsLabel = label(backdrop, {
 	AnchorPoint = Vector2.new(0.5, 0),
 	Position = UDim2.new(0.5, 0, 0, 164),
@@ -165,8 +159,8 @@ updateCoins()
 local catButton = Instance.new("TextButton")
 catButton.Name = "Cat"
 catButton.AnchorPoint = Vector2.new(0.5, 0.5)
-catButton.Position = UDim2.fromScale(0.5, 0.6)
-catButton.Size = UDim2.fromOffset(330, 380)
+catButton.Position = UDim2.fromScale(0.5, 0.56)
+catButton.Size = UDim2.fromOffset(460, 500)
 catButton.BackgroundTransparency = 1
 catButton.Text = ""
 catButton.Parent = backdrop
@@ -374,11 +368,28 @@ end)
 
 -- ============================ SOUND ============================
 
-local meow = Instance.new("Sound")
-meow.Name = "Meow"
-meow.SoundId = Config.MeowSoundId ~= "" and Config.MeowSoundId or Config.FallbackClickSound
-meow.Volume = Config.ClickVolume
-meow.Parent = gui
+-- Template sound; each click plays its own clone so rapid clicks all meow
+-- instead of restarting one sound (which went silent while spam-clicking).
+local meowTemplate = Instance.new("Sound")
+meowTemplate.Name = "Meow"
+meowTemplate.SoundId = Config.MeowSoundId ~= "" and Config.MeowSoundId or Config.FallbackClickSound
+meowTemplate.Volume = Config.ClickVolume
+meowTemplate.Parent = gui
+
+local function playMeow()
+	local sound = meowTemplate:Clone()
+	sound.PlaybackSpeed = rng:NextNumber(0.92, 1.12)
+	sound.Parent = gui
+	sound:Play()
+	sound.Ended:Once(function()
+		sound:Destroy()
+	end)
+	task.delay(5, function()
+		if sound.Parent then
+			sound:Destroy()
+		end
+	end)
+end
 
 -- ============================ CLICKING ============================
 
@@ -422,8 +433,7 @@ catButton.MouseButton1Down:Connect(function(x, y)
 	clickEvent:FireServer()
 
 	popup(lastGain, x, y)
-	meow.PlaybackSpeed = rng:NextNumber(0.92, 1.12)
-	meow:Play()
+	playMeow()
 
 	TweenService:Create(cat, squishInfo, { Size = UDim2.fromScale(0.92, 0.88) }):Play()
 	task.delay(0.08, function()
@@ -480,5 +490,8 @@ Daily.Start()
 
 local Store = require(script.Store)
 Store.Start()
+
+local Events = require(script.Events)
+Events.Start()
 
 print("[CatClicker] Client ready — all systems")
