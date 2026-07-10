@@ -84,7 +84,13 @@ local Config = {
 		Threshold = 500000, -- treats per Cat Point
 		BoostPerPoint = 0.25, -- +25% to ALL gains per point, forever
 		CoinsPerPoint = 100, -- Paw Coins granted per point (buy eggs!)
+		MaxPointsPerRebirth = 200, -- caps the runaway rebirth feedback loop
+		MaxCatPoints = 5000,
 	},
+
+	-- Hard economy caps (prevents number overflow / corrupted saves)
+	MaxTreats = 1e21,
+	MaxPawCoins = 1e9,
 
 	-- ==================== PETS & EGGS ====================
 	-- Paw Coins 🪙 come from rebirths, daily rewards and the spinner.
@@ -114,18 +120,40 @@ local Config = {
 
 	-- ==================== DAILY REWARDS ====================
 	Daily = {
-		CheckInBaseCoins = 50, -- day 1; +25 more per consecutive day
-		CheckInStreakBonus = 25,
-		SpinPrizes = { -- weighted; the spinner picks one per day
-			{ name = "500 Treats", treats = 500, weight = 24, icon = "🍪" },
-			{ name = "2,500 Treats", treats = 2500, weight = 20, icon = "🍪" },
-			{ name = "10,000 Treats", treats = 10000, weight = 10, icon = "🍪" },
-			{ name = "25 Paw Coins", coins = 25, weight = 20, icon = "🪙" },
-			{ name = "75 Paw Coins", coins = 75, weight = 12, icon = "🪙" },
-			{ name = "200 Paw Coins", coins = 200, weight = 6, icon = "🪙" },
-			{ name = "x3 Boost (2 min)", boost = 3, duration = 120, weight = 6, icon = "🚀" },
-			{ name = "JACKPOT! 500 Coins", coins = 500, weight = 2, icon = "🎰" },
+		-- 7-day login calendar (loops; streak picks the day)
+		CheckInRewards = {
+			{ name = "500 Treats", icon = "🍪", treats = 500 },
+			{ name = "150 Paw Coins", icon = "🪙", coins = 150 },
+			{ name = "10K Treats", icon = "🍪", treats = 10000 },
+			{ name = "x3 Boost (5 min)", icon = "🚀", boost = 3, duration = 300 },
+			{ name = "500 Paw Coins", icon = "💰", coins = 500 },
+			{ name = "100K Treats + x5 Boost", icon = "🎁", treats = 100000, boost = 5, duration = 300 },
+			{ name = "MEGA: 1M Treats + 2K Coins + x10", icon = "👑",
+				treats = 1000000, coins = 2000, boost = 10, duration = 300 },
 		},
+		SpinPrizes = { -- 8 wheel slices, weighted — big wins possible!
+			{ name = "10K Treats", treats = 10000, weight = 22, icon = "🍪" },
+			{ name = "250 Paw Coins", coins = 250, weight = 20, icon = "🪙" },
+			{ name = "100K Treats", treats = 100000, weight = 16, icon = "🎂" },
+			{ name = "x10 Boost (5 min)", boost = 10, duration = 300, weight = 12, icon = "🚀" },
+			{ name = "1,000 Paw Coins", coins = 1000, weight = 12, icon = "💰" },
+			{ name = "1M TREATS", treats = 1000000, weight = 8, icon = "🌟" },
+			{ name = "FREE LEGENDARY PET", pet = "chonker", weight = 6, icon = "🐱" },
+			{ name = "JACKPOT: 5K Coins + 5M Treats", coins = 5000, treats = 5000000, weight = 4, icon = "🎰" },
+		},
+	},
+
+	-- ==================== POTIONS ====================
+	-- Consumable buffs, bought with Treats or Paw Coins (in the Cat Shop)
+	Potions = {
+		{ id = "luck", name = "Luck Potion", icon = "🍀", costCoins = 400, duration = 600,
+			desc = "x3 Epic & Legendary egg luck (10 min)" },
+		{ id = "power", name = "Power Potion", icon = "⚡", costTreats = 75000, duration = 300,
+			clickMult = 3, desc = "x3 click power (5 min)" },
+		{ id = "golden", name = "Golden Potion", icon = "🌟", costCoins = 300, duration = 180,
+			boost = 5, desc = "x5 ALL treats (3 min)" },
+		{ id = "magnet", name = "Cat Magnet", icon = "🧲", costTreats = 150000, duration = 600,
+			desc = "Special cats spawn 2x faster (10 min)" },
 	},
 
 	-- ==================== ROBUX STORE ====================
@@ -161,8 +189,9 @@ local Config = {
 	-- ==================== MUTATION EVENTS ====================
 	-- Global world events that restyle the whole screen and buff everyone.
 	Events = {
-		MinInterval = 150, -- seconds between events (random in range)
-		MaxInterval = 300,
+		FirstDelay = 50, -- first event shortly after the server starts
+		MinInterval = 90, -- seconds between events (random in range)
+		MaxInterval = 180,
 		Types = {
 			{ id = "acidrain", name = "ACID RAIN", emoji = "☢️", duration = 75,
 				allMult = 2, color = { 120, 235, 90 },
@@ -216,6 +245,24 @@ end
 Config.EventsById = {}
 for _, event in Config.Events.Types do
 	Config.EventsById[event.id] = event
+end
+
+Config.PotionsById = {}
+for _, potion in Config.Potions do
+	Config.PotionsById[potion.id] = potion
+end
+
+-- Shared big-number formatter (K, M, B, T, Qa, Qi, ...)
+local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No" }
+function Config.FormatNumber(n: number): string
+	n = math.floor(math.max(0, n))
+	if n < 1000 then
+		return tostring(n)
+	end
+	local tier = math.min(math.floor(math.log10(n) / 3), #SUFFIXES - 1)
+	local scaled = n / 10 ^ (tier * 3)
+	local pattern = scaled >= 100 and "%.0f%s" or (scaled >= 10 and "%.1f%s" or "%.2f%s")
+	return string.format(pattern, scaled, SUFFIXES[tier + 1])
 end
 
 function Config.CostFor(gen, owned: number): number

@@ -151,9 +151,10 @@ function Events.Start()
 	gui.DisplayOrder = 6
 	gui.Parent = player:WaitForChild("PlayerGui")
 
+	-- Docked above the rebirth button so it never covers the cat or banners
 	banner = Instance.new("Frame")
-	banner.AnchorPoint = Vector2.new(0.5, 0)
-	banner.Position = UDim2.new(0.5, 0, 0, 276)
+	banner.AnchorPoint = Vector2.new(0.5, 1)
+	banner.Position = UDim2.new(0.5, 0, 1, -96)
 	banner.Size = UDim2.new(0, 520, 0, 78)
 	banner.BorderSizePixel = 0
 	banner.Visible = false

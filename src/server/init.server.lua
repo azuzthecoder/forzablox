@@ -70,6 +70,10 @@ local globalEvent = Instance.new("RemoteEvent")
 globalEvent.Name = "GlobalEvent"
 globalEvent.Parent = ReplicatedStorage
 
+local buyPotionFn = Instance.new("RemoteFunction")
+buyPotionFn.Name = "BuyPotion"
+buyPotionFn.Parent = ReplicatedStorage
+
 local leaderboardSync = Instance.new("RemoteEvent")
 leaderboardSync.Name = "LeaderboardSync"
 leaderboardSync.Parent = ReplicatedStorage
@@ -119,6 +123,10 @@ type PlayerState = {
 	checkInStreak: number,
 	lastSpin: number, -- day number
 	vip: boolean,
+	luckEnds: number, -- Luck Potion: better egg odds
+	magnetEnds: number, -- Cat Magnet: faster special cats
+	clickMult: number, -- Power Potion multiplier
+	clickMultEnds: number,
 }
 
 local function prestigeBoost(state: PlayerState): number
@@ -230,6 +238,10 @@ local function onPlayerAdded(player: Player)
 		checkInStreak = 0,
 		lastSpin = 0,
 		vip = false,
+		luckEnds = 0,
+		magnetEnds = 0,
+		clickMult = 1,
+		clickMultEnds = 0,
 	}
 	player:SetAttribute("PawCoins", 0)
 
@@ -284,10 +296,11 @@ clickEvent.OnServerEvent:Connect(function(player)
 	end
 	state.clickTokens -= 1
 
+	local potionMult = now < state.clickMultEnds and state.clickMult or 1
 	local gained = Config.ClickAmount(state.clickUpgrades) * boostFor(state, now)
-		* permanentBoost(state) * eventMult()
-	treats.Value += gained
-	state.totalEarned += gained
+		* permanentBoost(state) * eventMult() * potionMult
+	treats.Value = math.min(treats.Value + gained, Config.MaxTreats)
+	state.totalEarned = math.min(state.totalEarned + gained, Config.MaxTreats)
 	state.clicks += 1
 	player:SetAttribute("TotalEarned", state.totalEarned)
 	player:SetAttribute("Clicks", state.clicks)
@@ -353,8 +366,12 @@ task.spawn(function()
 				local catType = pickCatType()
 				state.goldenOfferExpires = now + Config.SpecialCats.ClickWindow
 				state.goldenOfferType = catType.id
-				state.nextGoldenAt = now + Config.SpecialCats.ClickWindow
+				local interval = Config.SpecialCats.ClickWindow
 					+ goldenRng:NextNumber(Config.SpecialCats.MinInterval, Config.SpecialCats.MaxInterval)
+				if now < state.magnetEnds then
+					interval *= 0.5 -- Cat Magnet potion
+				end
+				state.nextGoldenAt = now + interval
 				goldenOffer:FireClient(player, catType.id, Config.SpecialCats.ClickWindow)
 			end
 		end
@@ -430,8 +447,8 @@ task.spawn(function()
 				local treats = getTreats(player)
 				if treats then
 					local earned = perSecond * TICK * boostFor(state, os.clock()) * eventMult()
-					treats.Value += earned
-					state.totalEarned += earned
+					treats.Value = math.min(treats.Value + earned, Config.MaxTreats)
+					state.totalEarned = math.min(state.totalEarned + earned, Config.MaxTreats)
 					player:SetAttribute("TotalEarned", state.totalEarned)
 				end
 			end
@@ -451,12 +468,18 @@ rebirthFn.OnServerInvoke = function(player)
 	if points < 1 then
 		return false, "You need at least 500,000 treats to rebirth!"
 	end
+	-- Caps stop the rebirth->boost->rebirth feedback loop from exploding
+	points = math.min(points, Config.Prestige.MaxPointsPerRebirth)
+	points = math.min(points, Config.Prestige.MaxCatPoints - state.catPoints)
+	if points < 1 then
+		return false, "You've hit the max Cat Points — you beat the game!"
+	end
 
 	local coins = points * Config.Prestige.CoinsPerPoint
 		* (state.vip and Config.Monetization.VipCoinMultiplier or 1)
 	treats.Value = 0
 	state.catPoints += points
-	state.pawCoins += coins
+	state.pawCoins = math.min(state.pawCoins + coins, Config.MaxPawCoins)
 	player:SetAttribute("CatPoints", state.catPoints)
 	player:SetAttribute("PawCoins", state.pawCoins)
 	task.spawn(savePlayerData, player)
@@ -516,10 +539,16 @@ openEggFn.OnServerInvoke = function(player)
 	state.pawCoins -= Config.Pets.EggCost
 	player:SetAttribute("PawCoins", state.pawCoins)
 
-	local roll = goldenRng:NextNumber(0, petTotalWeight)
+	-- Luck Potion triples Epic & Legendary odds
+	local lucky = os.clock() < state.luckEnds
+	local total = 0
+	for _, pet in Config.Pets.List do
+		total += pet.weight * ((lucky and (pet.rarity == "Epic" or pet.rarity == "Legendary")) and 3 or 1)
+	end
+	local roll = goldenRng:NextNumber(0, total)
 	local hatched = Config.Pets.List[1]
 	for _, pet in Config.Pets.List do
-		roll -= pet.weight
+		roll -= pet.weight * ((lucky and (pet.rarity == "Epic" or pet.rarity == "Legendary")) and 3 or 1)
 		if roll <= 0 then
 			hatched = pet
 			break
@@ -607,12 +636,23 @@ checkInFn.OnServerInvoke = function(player)
 	end
 	state.lastCheckIn = day
 
-	local coins = (Config.Daily.CheckInBaseCoins + (state.checkInStreak - 1) * Config.Daily.CheckInStreakBonus)
-		* (state.vip and Config.Monetization.VipCoinMultiplier or 1)
-	state.pawCoins += coins
-	player:SetAttribute("PawCoins", state.pawCoins)
+	-- Reward from the 7-day calendar (loops after day 7)
+	local rewardIndex = ((state.checkInStreak - 1) % #Config.Daily.CheckInRewards) + 1
+	local reward = Config.Daily.CheckInRewards[rewardIndex] :: any
+	local treats = getTreats(player)
+	local coinMult = state.vip and Config.Monetization.VipCoinMultiplier or 1
+	if reward.treats and treats then
+		treats.Value = math.min(treats.Value + reward.treats, Config.MaxTreats)
+	end
+	if reward.coins then
+		state.pawCoins = math.min(state.pawCoins + reward.coins * coinMult, Config.MaxPawCoins)
+		player:SetAttribute("PawCoins", state.pawCoins)
+	end
+	if reward.boost then
+		applyTimedBoost(player, state, reward.boost, reward.duration)
+	end
 	task.spawn(savePlayerData, player)
-	return true, coins, state.checkInStreak
+	return true, rewardIndex, state.checkInStreak
 end
 
 local spinTotalWeight = 0
@@ -644,19 +684,65 @@ spinFn.OnServerInvoke = function(player)
 
 	local prize = Config.Daily.SpinPrizes[prizeIndex] :: any
 	if prize.treats then
-		treats.Value += prize.treats
-		state.totalEarned += prize.treats
+		treats.Value = math.min(treats.Value + prize.treats, Config.MaxTreats)
+		state.totalEarned = math.min(state.totalEarned + prize.treats, Config.MaxTreats)
 		player:SetAttribute("TotalEarned", state.totalEarned)
 	end
 	if prize.coins then
-		state.pawCoins += prize.coins * (state.vip and Config.Monetization.VipCoinMultiplier or 1)
+		state.pawCoins = math.min(
+			state.pawCoins + prize.coins * (state.vip and Config.Monetization.VipCoinMultiplier or 1),
+			Config.MaxPawCoins)
 		player:SetAttribute("PawCoins", state.pawCoins)
 	end
 	if prize.boost then
 		applyTimedBoost(player, state, prize.boost, prize.duration)
 	end
+	if prize.pet and Config.PetsById[prize.pet] then
+		state.pets[prize.pet] = (state.pets[prize.pet] or 0) + 1
+		syncPets(player)
+	end
 	task.spawn(savePlayerData, player)
 	return true, prizeIndex
+end
+
+-- ============================ POTIONS ============================
+
+buyPotionFn.OnServerInvoke = function(player, potionId)
+	local state = states[player]
+	local treats = getTreats(player)
+	if not state or not treats or not state.loaded or type(potionId) ~= "string" then
+		return false, "Not ready yet!"
+	end
+	local potion = Config.PotionsById[potionId] :: any
+	if not potion then
+		return false, "Unknown potion."
+	end
+
+	if potion.costCoins then
+		if state.pawCoins < potion.costCoins then
+			return false, "Not enough Paw Coins!"
+		end
+		state.pawCoins -= potion.costCoins
+		player:SetAttribute("PawCoins", state.pawCoins)
+	elseif potion.costTreats then
+		if treats.Value < potion.costTreats then
+			return false, "Not enough treats!"
+		end
+		treats.Value -= potion.costTreats
+	end
+
+	local now = os.clock()
+	if potion.boost then
+		applyTimedBoost(player, state, potion.boost, potion.duration)
+	elseif potion.clickMult then
+		state.clickMult = potion.clickMult
+		state.clickMultEnds = now + potion.duration
+	elseif potion.id == "luck" then
+		state.luckEnds = now + potion.duration
+	elseif potion.id == "magnet" then
+		state.magnetEnds = now + potion.duration
+	end
+	return true, potion.icon .. " " .. potion.name .. " activated!"
 end
 
 -- ============================ MUTATION EVENTS ============================
@@ -669,9 +755,16 @@ globalEvent.OnServerEvent:Connect(function(player)
 end)
 
 task.spawn(function()
+	task.wait(Config.Events.FirstDelay)
+	-- Rotate through a shuffled bag of events so every type shows up
+	local bag: { any } = {}
 	while true do
-		task.wait(goldenRng:NextNumber(Config.Events.MinInterval, Config.Events.MaxInterval))
-		local event = Config.Events.Types[goldenRng:NextInteger(1, #Config.Events.Types)]
+		if #bag == 0 then
+			for _, eventType in Config.Events.Types do
+				table.insert(bag, goldenRng:NextInteger(1, #bag + 1), eventType)
+			end
+		end
+		local event = table.remove(bag) :: any
 		activeEvent = event
 		activeEventEnds = os.clock() + event.duration
 		globalEvent:FireAllClients(event.id, event.duration)
@@ -695,6 +788,7 @@ task.spawn(function()
 
 		task.wait(event.duration)
 		activeEvent = nil
+		task.wait(goldenRng:NextNumber(Config.Events.MinInterval, Config.Events.MaxInterval))
 	end
 end)
 
@@ -863,13 +957,19 @@ loadPlayerData = function(player: Player)
 		warn("[CatClicker] Failed to load data for " .. player.Name .. "; playing session-only")
 	end
 
+	if success and data == nil then
+		-- Brand new player: show the tutorial
+		player:SetAttribute("FirstJoin", true)
+	end
+
 	if type(data) == "table" then
+		-- All values are clamped so a corrupted/overflowed save heals itself
 		local treats = getTreats(player)
 		if treats then
-			treats.Value = tonumber(data.treats) or 0
+			treats.Value = math.clamp(tonumber(data.treats) or 0, 0, Config.MaxTreats)
 		end
-		state.totalEarned = tonumber(data.totalEarned) or 0
-		state.clicks = math.floor(tonumber(data.clicks) or 0)
+		state.totalEarned = math.clamp(tonumber(data.totalEarned) or 0, 0, Config.MaxTreats)
+		state.clicks = math.max(0, math.floor(tonumber(data.clicks) or 0))
 		if type(data.counts) == "table" then
 			for id, owned in data.counts do
 				if Config.GeneratorsById[id] and type(owned) == "number" then
@@ -884,7 +984,7 @@ loadPlayerData = function(player: Player)
 				end
 			end
 		end
-		state.catPoints = math.floor(tonumber(data.catPoints) or 0)
+		state.catPoints = math.clamp(math.floor(tonumber(data.catPoints) or 0), 0, Config.Prestige.MaxCatPoints)
 		if type(data.redeemed) == "table" then
 			for code, has in data.redeemed do
 				if type(code) == "string" and has == true then
@@ -893,7 +993,7 @@ loadPlayerData = function(player: Player)
 			end
 		end
 		state.playtimeBase = tonumber(data.playtime) or 0
-		state.pawCoins = math.floor(tonumber(data.pawCoins) or 0)
+		state.pawCoins = math.clamp(math.floor(tonumber(data.pawCoins) or 0), 0, Config.MaxPawCoins)
 		state.lastCheckIn = math.floor(tonumber(data.lastCheckIn) or 0)
 		state.checkInStreak = math.floor(tonumber(data.checkInStreak) or 0)
 		state.lastSpin = math.floor(tonumber(data.lastSpin) or 0)

@@ -63,24 +63,7 @@ local function label(parent: Instance, props: { [string]: any }): TextLabel
 	return l
 end
 
-local function formatNumber(n: number): string
-	if n >= 1e12 then
-		return string.format("%.2fT", n / 1e12)
-	elseif n >= 1e9 then
-		return string.format("%.2fB", n / 1e9)
-	elseif n >= 1e6 then
-		return string.format("%.2fM", n / 1e6)
-	end
-	local s = tostring(math.floor(n))
-	while true do
-		local replaced
-		s, replaced = s:gsub("^(%-?%d+)(%d%d%d)", "%1,%2")
-		if replaced == 0 then
-			break
-		end
-	end
-	return s
-end
+local formatNumber = Config.FormatNumber
 
 local function formatRate(rate: number): string
 	if rate < 1 then
@@ -157,7 +140,7 @@ function Shop.Start()
 	local sidebar = Instance.new("Frame")
 	sidebar.AnchorPoint = Vector2.new(1, 0)
 	sidebar.Position = UDim2.new(1, -12, 0, 12)
-	sidebar.Size = UDim2.new(0, 320, 1, -24)
+	sidebar.Size = UDim2.new(0, 360, 1, -24)
 	sidebar.BackgroundColor3 = C.Panel
 	sidebar.BackgroundTransparency = 0.06
 	sidebar.BorderSizePixel = 0
@@ -317,6 +300,72 @@ function Shop.Start()
 		end)
 
 		table.insert(cards, { button = card, costLabel = costLabel, ownedLabel = ownedLabel, icon = icon, gen = gen })
+	end
+
+	-- ============== Potions section ==============
+	local buyPotion = ReplicatedStorage:WaitForChild("BuyPotion") :: RemoteFunction
+
+	local potionStatus = label(list, {
+		Size = UDim2.new(1, -8, 0, 24),
+		TextSize = 17,
+		TextColor3 = Color3.fromRGB(150, 90, 200),
+		Text = "🧪 Cat Potions",
+		LayoutOrder = 200,
+	})
+
+	for i, potion in Config.Potions do
+		local card = Instance.new("TextButton")
+		card.Size = UDim2.new(1, -8, 0, 70)
+		card.BackgroundColor3 = C.Panel
+		card.BorderSizePixel = 0
+		card.Text = ""
+		card.LayoutOrder = 200 + i
+		round(card, 14)
+		card.Parent = list
+
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = Color3.fromRGB(190, 140, 230)
+		stroke.Thickness = 2
+		stroke.Parent = card
+
+		label(card, {
+			Position = UDim2.new(0, 12, 0, 0),
+			Size = UDim2.new(0, 36, 1, 0),
+			TextSize = 28,
+			Text = potion.icon,
+		})
+		label(card, {
+			Position = UDim2.new(0, 56, 0, 8),
+			Size = UDim2.new(1, -66, 0, 20),
+			TextSize = 16,
+			Text = potion.name,
+		})
+		label(card, {
+			Position = UDim2.new(0, 56, 0, 28),
+			Size = UDim2.new(1, -66, 0, 16),
+			TextSize = 12,
+			TextColor3 = C.TextSoft,
+			Text = potion.desc,
+		})
+		label(card, {
+			Position = UDim2.new(0, 56, 0, 46),
+			Size = UDim2.new(1, -66, 0, 18),
+			TextSize = 14,
+			TextColor3 = Color3.fromRGB(150, 90, 200),
+			Text = (potion :: any).costCoins
+				and ("🪙 " .. formatNumber((potion :: any).costCoins))
+				or ("🍪 " .. formatNumber((potion :: any).costTreats)),
+		})
+
+		card.MouseButton1Click:Connect(function()
+			local ok, message = buyPotion:InvokeServer(potion.id)
+			potionStatus.Text = tostring(message)
+			potionStatus.TextColor3 = ok and Color3.fromRGB(90, 170, 100) or Color3.fromRGB(220, 90, 90)
+			task.delay(3, function()
+				potionStatus.Text = "🧪 Cat Potions"
+				potionStatus.TextColor3 = Color3.fromRGB(150, 90, 200)
+			end)
+		end)
 	end
 
 	-- ============================ SYNC ============================

@@ -51,20 +51,7 @@ local function label(parent: Instance, props: { [string]: any }): TextLabel
 	return l
 end
 
-local function formatNumber(n: number): string
-	if n >= 1e6 then
-		return string.format("%.2f", n / 1e6):gsub("%.?0+$", "") .. "M"
-	end
-	local s = tostring(math.floor(n))
-	while true do
-		local replaced
-		s, replaced = s:gsub("^(%-?%d+)(%d%d%d)", "%1,%2")
-		if replaced == 0 then
-			break
-		end
-	end
-	return s
-end
+local formatNumber = Config.FormatNumber
 
 -- ============================ SCREEN ============================
 
@@ -493,5 +480,8 @@ Store.Start()
 
 local Events = require(script.Events)
 Events.Start()
+
+local Tutorial = require(script.Tutorial)
+Tutorial.Start()
 
 print("[CatClicker] Client ready — all systems")

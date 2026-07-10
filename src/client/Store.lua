@@ -243,7 +243,7 @@ function Store.Start()
 	-- 👑 VIP badge (hides once owned)
 	local vipPromo = Instance.new("TextButton")
 	vipPromo.Position = UDim2.new(0, 274, 0, 16)
-	vipPromo.Size = UDim2.new(0, 170, 0, 66)
+	vipPromo.Size = UDim2.new(0, 200, 0, 92)
 	vipPromo.BackgroundColor3 = Color3.fromRGB(255, 224, 150)
 	vipPromo.BorderSizePixel = 0
 	vipPromo.Text = ""
@@ -256,16 +256,37 @@ function Store.Start()
 	promoStroke.Color = Color3.fromRGB(240, 170, 40)
 	promoStroke.Thickness = 2.5
 	promoStroke.Parent = vipPromo
+	local ribbon = Instance.new("TextLabel")
+	ribbon.AnchorPoint = Vector2.new(0.5, 0.5)
+	ribbon.Position = UDim2.new(0.5, 0, 0, 2)
+	ribbon.Size = UDim2.new(0, 130, 0, 22)
+	ribbon.BackgroundColor3 = Color3.fromRGB(226, 80, 100)
+	ribbon.Font = Enum.Font.FredokaOne
+	ribbon.TextSize = 12
+	ribbon.TextColor3 = Color3.new(1, 1, 1)
+	ribbon.Text = "⭐ BEST VALUE ⭐"
+	ribbon.Rotation = -3
+	ribbon.ZIndex = 3
+	round(ribbon, 8)
+	ribbon.Parent = vipPromo
+
 	label(vipPromo, {
-		Position = UDim2.new(0, 0, 0, 6),
+		Position = UDim2.new(0, 0, 0, 14),
 		Size = UDim2.new(1, 0, 0, 30),
-		TextSize = 21,
-		Text = "👑 VIP  x" .. Config.Monetization.VipMultiplier,
+		TextSize = 22,
+		Text = "👑 VIP  x" .. Config.Monetization.VipMultiplier .. " ALL",
 	})
 	label(vipPromo, {
-		Position = UDim2.new(0, 0, 0, 36),
-		Size = UDim2.new(1, 0, 0, 22),
+		Position = UDim2.new(0, 0, 0, 44),
+		Size = UDim2.new(1, 0, 0, 20),
 		TextSize = 12,
+		TextColor3 = Color3.fromRGB(160, 105, 25),
+		Text = "x2 coins • FULL offline pay",
+	})
+	label(vipPromo, {
+		Position = UDim2.new(0, 0, 0, 64),
+		Size = UDim2.new(1, 0, 0, 22),
+		TextSize = 13,
 		TextColor3 = Color3.fromRGB(180, 120, 30),
 		Text = "✨ tap to go VIP ✨",
 	})
@@ -299,8 +320,12 @@ function Store.Start()
 	-- 🔥 Rotating "hot deal" bubble (cycles through the products)
 	local deal = Instance.new("TextButton")
 	deal.AnchorPoint = Vector2.new(1, 1)
-	deal.Position = UDim2.new(1, -344, 1, -16)
-	deal.Size = UDim2.new(0, 230, 0, 66)
+	deal.Position = UDim2.new(1, -384, 1, -16)
+	deal.Size = UDim2.new(0, 240, 0, 72)
+	local dealGradient = Instance.new("UIGradient")
+	dealGradient.Color = ColorSequence.new(Color3.fromRGB(255, 255, 250), Color3.fromRGB(225, 250, 230))
+	dealGradient.Rotation = 25
+	dealGradient.Parent = deal
 	deal.BackgroundColor3 = C.Panel
 	deal.BorderSizePixel = 0
 	deal.Text = ""
@@ -336,10 +361,10 @@ function Store.Start()
 	local function showDeal()
 		local product = Config.Monetization.Products[dealIndex]
 		dealIcon.Text = product.icon
-		dealName.Text = product.name
-		deal.Size = UDim2.new(0, 210, 0, 60)
+		dealName.Text = product.name .. "  •  tap to buy!"
+		deal.Size = UDim2.new(0, 220, 0, 64)
 		TweenService:Create(deal, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
-			Size = UDim2.new(0, 230, 0, 66),
+			Size = UDim2.new(0, 240, 0, 72),
 		}):Play()
 	end
 	showDeal()

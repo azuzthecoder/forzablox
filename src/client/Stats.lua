@@ -31,24 +31,7 @@ local function label(parent: Instance, props: { [string]: any }): TextLabel
 	return l
 end
 
-local function formatNumber(n: number): string
-	if n >= 1e12 then
-		return string.format("%.2fT", n / 1e12)
-	elseif n >= 1e9 then
-		return string.format("%.2fB", n / 1e9)
-	elseif n >= 1e6 then
-		return string.format("%.2fM", n / 1e6)
-	end
-	local s = tostring(math.floor(n))
-	while true do
-		local replaced
-		s, replaced = s:gsub("^(%-?%d+)(%d%d%d)", "%1,%2")
-		if replaced == 0 then
-			break
-		end
-	end
-	return s
-end
+local formatNumber = Config.FormatNumber
 
 function Stats.Start()
 	local leaderboardSync = ReplicatedStorage:WaitForChild("LeaderboardSync") :: RemoteEvent

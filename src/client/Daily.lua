@@ -1,8 +1,10 @@
 --!strict
--- Daily rewards: a check-in (streak = more Paw Coins) and a once-a-day
--- prize spinner with a cycling reveal animation.
+-- Daily rewards: a 7-day login calendar (shows exactly what each day pays)
+-- and a real spinning prize wheel. Auto-opens on join when something is
+-- claimable.
 
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
@@ -58,6 +60,7 @@ function Daily.Start()
 	gui.DisplayOrder = 25
 	gui.Parent = player:WaitForChild("PlayerGui")
 
+	-- Bubble toggle button
 	local toggle = button(gui, "", {
 		Position = UDim2.new(0, 12, 0, 416),
 		Size = UDim2.new(0, 158, 0, 58),
@@ -78,9 +81,8 @@ function Daily.Start()
 	toggleTextStroke.Color = Color3.new(1, 1, 1)
 	toggleTextStroke.Thickness = 1.5
 	toggleTextStroke.Parent = toggleText
-	local TweenService = game:GetService("TweenService")
 	task.spawn(function()
-		task.wait(0.5) -- offset the bob from the other bubbles
+		task.wait(0.5)
 		while toggle.Parent do
 			TweenService:Create(toggle, TweenInfo.new(1.4, Enum.EasingStyle.Sine), {
 				Position = UDim2.new(0, 12, 0, 422),
@@ -93,31 +95,37 @@ function Daily.Start()
 		end
 	end)
 
+	-- ============== Panel ==============
 	local panel = Instance.new("Frame")
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.new(0, 400, 0, 430)
+	panel.Size = UDim2.new(0, 560, 0, 620)
 	panel.BackgroundColor3 = C.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
-	round(panel, 18)
+	round(panel, 22)
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = C.Accent
-	stroke.Thickness = 2
+	stroke.Thickness = 3
 	stroke.Parent = panel
 	panel.Parent = gui
 
-	label(panel, {
+	local title = label(panel, {
 		Position = UDim2.new(0, 0, 0, 12),
-		Size = UDim2.new(1, 0, 0, 28),
-		TextSize = 22,
+		Size = UDim2.new(1, 0, 0, 30),
+		TextSize = 26,
 		TextColor3 = C.PinkDark,
 		Text = "🎁 Daily Rewards",
 	})
+	local titleStroke = Instance.new("UIStroke")
+	titleStroke.Color = Color3.new(1, 1, 1)
+	titleStroke.Thickness = 1.5
+	titleStroke.Parent = title
+
 	local close = button(panel, "✕", {
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -12, 0, 12),
-		Size = UDim2.new(0, 32, 0, 28),
+		Position = UDim2.new(1, -14, 0, 14),
+		Size = UDim2.new(0, 34, 0, 30),
 		BackgroundColor3 = C.Background,
 		TextColor3 = C.Text,
 		TextSize = 14,
@@ -126,86 +134,138 @@ function Daily.Start()
 		panel.Visible = false
 	end)
 
-	-- ============== Check-in section ==============
-	local checkPane = Instance.new("Frame")
-	checkPane.Position = UDim2.new(0, 16, 0, 50)
-	checkPane.Size = UDim2.new(1, -32, 0, 120)
-	checkPane.BackgroundColor3 = C.Background
-	checkPane.BorderSizePixel = 0
-	round(checkPane, 14)
-	checkPane.Parent = panel
-
-	local streakLabel = label(checkPane, {
-		Position = UDim2.new(0, 0, 0, 10),
-		Size = UDim2.new(1, 0, 0, 22),
-		TextSize = 17,
-		Text = "📅 Daily Check-In",
-	})
-	local checkInfo = label(checkPane, {
-		Position = UDim2.new(0, 0, 0, 34),
-		Size = UDim2.new(1, 0, 0, 18),
-		TextSize = 13,
+	-- ============== 7-day calendar ==============
+	local streakLabel = label(panel, {
+		Position = UDim2.new(0, 0, 0, 46),
+		Size = UDim2.new(1, 0, 0, 20),
+		TextSize = 15,
 		TextColor3 = C.TextSoft,
-		Text = "Come back daily for a bigger streak bonus!",
+		Text = "📅 Login Calendar  •  Streak: 0🔥",
 	})
-	local checkBtn = button(checkPane, "CLAIM", {
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -10),
-		Size = UDim2.new(1, -32, 0, 40),
+
+	local tiles: { Frame } = {}
+	local rewards = Config.Daily.CheckInRewards
+	for i, reward in rewards do
+		local col = (i - 1) % 4
+		local row = math.floor((i - 1) / 4)
+		local tile = Instance.new("Frame")
+		tile.Position = UDim2.new(0, 20 + col * 132, 0, 72 + row * 92)
+		tile.Size = UDim2.new(0, 124, 0, 84)
+		tile.BackgroundColor3 = C.Background
+		tile.BorderSizePixel = 0
+		round(tile, 12)
+		local tileStroke = Instance.new("UIStroke")
+		tileStroke.Name = "TileStroke"
+		tileStroke.Color = C.PanelShadow
+		tileStroke.Thickness = 2
+		tileStroke.Parent = tile
+		tile.Parent = panel
+		tiles[i] = tile
+
+		label(tile, {
+			Position = UDim2.new(0, 0, 0, 4),
+			Size = UDim2.new(1, 0, 0, 16),
+			TextSize = 12,
+			TextColor3 = C.TextSoft,
+			Text = "DAY " .. i,
+		})
+		label(tile, {
+			Position = UDim2.new(0, 0, 0, 20),
+			Size = UDim2.new(1, 0, 0, 28),
+			TextSize = 22,
+			Text = (reward :: any).icon,
+		})
+		label(tile, {
+			Position = UDim2.new(0, 4, 0, 48),
+			Size = UDim2.new(1, -8, 0, 32),
+			TextSize = 11,
+			TextWrapped = true,
+			Text = (reward :: any).name,
+		})
+	end
+
+	local checkBtn = button(panel, "CLAIM TODAY'S REWARD", {
+		Position = UDim2.new(0, 20, 0, 262),
+		Size = UDim2.new(1, -40, 0, 42),
 		BackgroundColor3 = C.PinkDark,
+		TextSize = 17,
 	})
 
-	-- ============== Spinner section ==============
-	local spinPane = Instance.new("Frame")
-	spinPane.Position = UDim2.new(0, 16, 0, 182)
-	spinPane.Size = UDim2.new(1, -32, 0, 230)
-	spinPane.BackgroundColor3 = C.Background
-	spinPane.BorderSizePixel = 0
-	round(spinPane, 14)
-	spinPane.Parent = panel
-
-	label(spinPane, {
-		Position = UDim2.new(0, 0, 0, 10),
+	-- ============== Spinning wheel ==============
+	label(panel, {
+		Position = UDim2.new(0, 0, 0, 312),
 		Size = UDim2.new(1, 0, 0, 22),
-		TextSize = 17,
-		Text = "🎡 Lucky Spinner",
+		TextSize = 16,
+		TextColor3 = C.TextSoft,
+		Text = "🎡 Lucky Spinner — one free spin a day!",
 	})
 
-	local prizeDisplay = Instance.new("Frame")
-	prizeDisplay.AnchorPoint = Vector2.new(0.5, 0)
-	prizeDisplay.Position = UDim2.new(0.5, 0, 0, 42)
-	prizeDisplay.Size = UDim2.new(1, -40, 0, 90)
-	prizeDisplay.BackgroundColor3 = C.Panel
-	prizeDisplay.BorderSizePixel = 0
-	round(prizeDisplay, 12)
-	local prizeStroke = Instance.new("UIStroke")
-	prizeStroke.Color = C.Accent
-	prizeStroke.Thickness = 3
-	prizeStroke.Parent = prizeDisplay
-	prizeDisplay.Parent = spinPane
-
-	local prizeIcon = label(prizeDisplay, {
-		Position = UDim2.new(0, 0, 0, 8),
-		Size = UDim2.new(1, 0, 0, 40),
-		TextSize = 34,
-		Text = "❓",
-	})
-	local prizeName = label(prizeDisplay, {
-		Position = UDim2.new(0, 0, 0, 52),
-		Size = UDim2.new(1, 0, 0, 26),
-		TextSize = 17,
-		Text = "Spin for a daily prize!",
-	})
-
-	local spinBtn = button(spinPane, "SPIN!", {
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -12),
-		Size = UDim2.new(1, -32, 0, 44),
-		BackgroundColor3 = C.PinkDark,
+	label(panel, { -- pointer
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 330),
+		Size = UDim2.new(0, 30, 0, 22),
 		TextSize = 20,
+		TextColor3 = C.PinkDark,
+		Text = "▼",
+	}).ZIndex = 5
+
+	local wheel = Instance.new("Frame")
+	wheel.AnchorPoint = Vector2.new(0.5, 0)
+	wheel.Position = UDim2.new(0.5, 0, 0, 350)
+	wheel.Size = UDim2.new(0, 190, 0, 190)
+	wheel.BackgroundColor3 = C.Background
+	wheel.BorderSizePixel = 0
+	round(wheel, 95)
+	local wheelStroke = Instance.new("UIStroke")
+	wheelStroke.Color = C.Accent
+	wheelStroke.Thickness = 4
+	wheelStroke.Parent = wheel
+	wheel.Parent = panel
+
+	local prizes = Config.Daily.SpinPrizes
+	for i, prize in prizes do
+		local holder = Instance.new("Frame")
+		holder.Size = UDim2.fromScale(1, 1)
+		holder.BackgroundTransparency = 1
+		holder.Rotation = (i - 1) * (360 / #prizes)
+		holder.Parent = wheel
+		label(holder, {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 8),
+			Size = UDim2.new(0, 30, 0, 28),
+			TextSize = 22,
+			Text = (prize :: any).icon,
+		})
+	end
+	local hub = Instance.new("Frame")
+	hub.AnchorPoint = Vector2.new(0.5, 0.5)
+	hub.Position = UDim2.fromScale(0.5, 0.5)
+	hub.Size = UDim2.new(0, 56, 0, 56)
+	hub.BackgroundColor3 = C.Panel
+	hub.BorderSizePixel = 0
+	round(hub, 28)
+	hub.Parent = wheel
+	label(hub, {
+		Size = UDim2.fromScale(1, 1),
+		TextSize = 24,
+		Text = "🐾",
 	})
 
-	-- ============== State / behaviour ==============
+	local prizeName = label(panel, {
+		Position = UDim2.new(0, 0, 0, 546),
+		Size = UDim2.new(1, 0, 0, 22),
+		TextSize = 16,
+		Text = "What will you win today?",
+	})
+
+	local spinBtn = button(panel, "SPIN!", {
+		Position = UDim2.new(0, 20, 1, -46),
+		Size = UDim2.new(1, -40, 0, 36),
+		BackgroundColor3 = C.PinkDark,
+		TextSize = 18,
+	})
+
+	-- ============== Behaviour ==============
 	local spinning = false
 
 	local function refresh()
@@ -214,9 +274,28 @@ function Daily.Start()
 			if type(state) ~= "table" then
 				return
 			end
-			streakLabel.Text = ("📅 Daily Check-In  •  Streak: %d🔥"):format(state.streak or 0)
+			local streak = state.streak or 0
+			streakLabel.Text = ("📅 Login Calendar  •  Streak: %d🔥"):format(streak)
+
+			-- Highlight today's tile (next unclaimed day in the 7-day cycle)
+			local todayIndex = state.canCheckIn
+				and (streak % #rewards) + 1
+				or ((streak - 1) % #rewards) + 1
+			for i, tile in tiles do
+				local tileStroke = tile:FindFirstChild("TileStroke") :: UIStroke
+				if i == todayIndex then
+					tileStroke.Color = C.Accent
+					tileStroke.Thickness = 3
+					tile.BackgroundColor3 = Color3.fromRGB(255, 246, 224)
+				else
+					tileStroke.Color = C.PanelShadow
+					tileStroke.Thickness = 2
+					tile.BackgroundColor3 = C.Background
+				end
+			end
+
 			if state.canCheckIn then
-				checkBtn.Text = "CLAIM TODAY'S COINS"
+				checkBtn.Text = "CLAIM TODAY'S REWARD"
 				checkBtn.BackgroundColor3 = C.PinkDark
 			else
 				checkBtn.Text = "✓ CLAIMED — BACK TOMORROW"
@@ -240,13 +319,14 @@ function Daily.Start()
 	end)
 
 	checkBtn.MouseButton1Click:Connect(function()
-		local ok, result, streak = checkIn:InvokeServer()
-		if ok then
-			checkInfo.Text = ("+%d Paw Coins! 🔥 %d-day streak"):format(result, streak)
-			checkInfo.TextColor3 = Color3.fromRGB(90, 170, 100)
+		local ok, result, _streak = checkIn:InvokeServer()
+		if ok and type(result) == "number" then
+			local reward = rewards[result] :: any
+			prizeName.Text = "🎉 Day " .. result .. " claimed: " .. reward.name .. "!"
+			prizeName.TextColor3 = Color3.fromRGB(90, 170, 100)
 		else
-			checkInfo.Text = tostring(result)
-			checkInfo.TextColor3 = C.TextSoft
+			prizeName.Text = tostring(result)
+			prizeName.TextColor3 = C.TextSoft
 		end
 		refresh()
 	end)
@@ -258,35 +338,38 @@ function Daily.Start()
 		local ok, result = spin:InvokeServer()
 		if not ok then
 			prizeName.Text = tostring(result)
+			prizeName.TextColor3 = C.TextSoft
 			return
 		end
 
-		-- Cycle through prizes, slowing down, landing on the server's pick
 		spinning = true
-		local prizes = Config.Daily.SpinPrizes
-		local n = #prizes
 		local finalIndex = result :: number
-		local steps = n * 2 + finalIndex
-		local delay = 0.05
-		local index = 0
-		for step = 1, steps do
-			index = (index % n) + 1
-			local prize = prizes[index] :: any
-			prizeIcon.Text = prize.icon
-			prizeName.Text = prize.name
-			prizeStroke.Color = C.PanelShadow
-			task.wait(delay)
-			-- ease out over the last stretch
-			if step > steps - 8 then
-				delay *= 1.35
-			end
+		local slice = 360 / #prizes
+		-- Land the winning slice under the top pointer after 5 full spins
+		local target = 360 * 5 + (360 - (finalIndex - 1) * slice)
+		wheel.Rotation = 0
+		prizeName.Text = "Spinning..."
+		prizeName.TextColor3 = C.Text
+		local tween = TweenService:Create(wheel,
+			TweenInfo.new(4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Rotation = target })
+		tween.Completed:Connect(function()
+			local prize = prizes[finalIndex] :: any
+			prizeName.Text = "🎉 " .. prize.name .. " 🎉"
+			prizeName.TextColor3 = C.PinkDark
+			spinning = false
+			refresh()
+		end)
+		tween:Play()
+	end)
+
+	-- Auto-open on join when something is claimable (waits out the tutorial)
+	task.spawn(function()
+		task.wait(player:GetAttribute("FirstJoin") and 30 or 6)
+		local state = dailyState:InvokeServer()
+		if type(state) == "table" and (state.canCheckIn or state.canSpin) then
+			panel.Visible = true
+			refresh()
 		end
-		local prize = prizes[finalIndex] :: any
-		prizeIcon.Text = prize.icon
-		prizeName.Text = "🎉 " .. prize.name .. " 🎉"
-		prizeStroke.Color = C.Accent
-		spinning = false
-		refresh()
 	end)
 end
 
