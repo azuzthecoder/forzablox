@@ -127,7 +127,7 @@ local treatsLabel = label(backdrop, {
 })
 local coinsLabel = label(backdrop, {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 164),
+	Position = UDim2.new(0.5, 0, 0, 138),
 	Size = UDim2.new(0, 400, 0, 24),
 	TextSize = 18,
 	TextColor3 = C.Accent,
@@ -146,8 +146,13 @@ updateCoins()
 local catButton = Instance.new("TextButton")
 catButton.Name = "Cat"
 catButton.AnchorPoint = Vector2.new(0.5, 0.5)
-catButton.Position = UDim2.fromScale(0.5, 0.56)
-catButton.Size = UDim2.fromOffset(460, 500)
+catButton.Position = UDim2.fromScale(0.5, 0.6)
+-- Scales with the screen so banners above never overlap the cat
+catButton.Size = UDim2.fromScale(0.42, 0.55)
+local catAspect = Instance.new("UIAspectRatioConstraint")
+catAspect.AspectRatio = 0.92
+catAspect.AspectType = Enum.AspectType.FitWithinMaxSize
+catAspect.Parent = catButton
 catButton.BackgroundTransparency = 1
 catButton.Text = ""
 catButton.Parent = backdrop

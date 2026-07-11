@@ -128,7 +128,7 @@ function Shop.Start()
 	-- Treats/sec readout (sits under the big counter from stage 1)
 	tpsLabel = label(gui, {
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 140),
+		Position = UDim2.new(0.5, 0, 0, 116),
 		Size = UDim2.new(0, 400, 0, 24),
 		TextSize = 20,
 		TextColor3 = C.PinkDark,

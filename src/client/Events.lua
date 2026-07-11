@@ -62,14 +62,13 @@ local function startEvent(eventId: string, duration: number)
 		tint.BackgroundColor3 = Color3.fromRGB(30, 30, 80)
 	end
 
-	-- Announcement banner
+	-- Announcement pill (single line, stays above the cat)
 	banner.Visible = true
 	banner.BackgroundColor3 = color
-	bannerTitle.Text = event.emoji .. " " .. event.name .. " " .. event.emoji
-	bannerDesc.Text = event.desc
-	banner.Size = UDim2.new(0, 200, 0, 40)
+	bannerTitle.Text = ("%s %s — %s"):format(event.emoji, event.name, event.desc)
+	banner.Size = UDim2.new(0, 200, 0, 24)
 	TweenService:Create(banner, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		Size = UDim2.new(0, 520, 0, 78),
+		Size = UDim2.new(0, 500, 0, 28),
 	}):Play()
 
 	-- Weather particles
@@ -151,57 +150,51 @@ function Events.Start()
 	gui.DisplayOrder = 6
 	gui.Parent = player:WaitForChild("PlayerGui")
 
-	-- Docked above the rebirth button so it never covers the cat or banners
+	-- Compact pill in the top strip, third row under the special-cat pills
 	banner = Instance.new("Frame")
-	banner.AnchorPoint = Vector2.new(0.5, 1)
-	banner.Position = UDim2.new(0.5, 0, 1, -96)
-	banner.Size = UDim2.new(0, 520, 0, 78)
+	banner.AnchorPoint = Vector2.new(0.5, 0)
+	banner.Position = UDim2.new(0.5, 0, 0, 224)
+	banner.Size = UDim2.new(0, 500, 0, 28)
 	banner.BorderSizePixel = 0
 	banner.Visible = false
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 20)
+	corner.CornerRadius = UDim.new(0, 14)
 	corner.Parent = banner
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = Color3.new(1, 1, 1)
-	stroke.Thickness = 3
+	stroke.Thickness = 2
 	stroke.Parent = banner
 	banner.Parent = gui
 
 	bannerTitle = Instance.new("TextLabel")
 	bannerTitle.BackgroundTransparency = 1
-	bannerTitle.Position = UDim2.new(0, 0, 0, 6)
-	bannerTitle.Size = UDim2.new(1, 0, 0, 30)
+	bannerTitle.Size = UDim2.new(1, -70, 1, 0)
+	bannerTitle.Position = UDim2.new(0, 12, 0, 0)
 	bannerTitle.Font = Enum.Font.FredokaOne
-	bannerTitle.TextSize = 24
+	bannerTitle.TextSize = 15
 	bannerTitle.TextColor3 = Color3.new(1, 1, 1)
-	bannerTitle.TextStrokeTransparency = 0.5
+	bannerTitle.TextStrokeTransparency = 0.6
+	bannerTitle.TextXAlignment = Enum.TextXAlignment.Left
+	bannerTitle.TextTruncate = Enum.TextTruncate.AtEnd
 	bannerTitle.Text = ""
 	bannerTitle.Parent = banner
 
-	bannerDesc = Instance.new("TextLabel")
-	bannerDesc.BackgroundTransparency = 1
-	bannerDesc.Position = UDim2.new(0, 0, 0, 36)
-	bannerDesc.Size = UDim2.new(1, 0, 0, 22)
-	bannerDesc.Font = Enum.Font.FredokaOne
-	bannerDesc.TextSize = 16
-	bannerDesc.TextColor3 = Color3.new(1, 1, 1)
-	bannerDesc.Text = ""
-	bannerDesc.Parent = banner
-
 	bannerTime = Instance.new("TextLabel")
 	bannerTime.BackgroundTransparency = 1
-	bannerTime.Position = UDim2.new(0, 0, 0, 56)
-	bannerTime.Size = UDim2.new(1, 0, 0, 18)
+	bannerTime.AnchorPoint = Vector2.new(1, 0)
+	bannerTime.Position = UDim2.new(1, -12, 0, 0)
+	bannerTime.Size = UDim2.new(0, 50, 1, 0)
 	bannerTime.Font = Enum.Font.FredokaOne
-	bannerTime.TextSize = 13
+	bannerTime.TextSize = 14
 	bannerTime.TextColor3 = Color3.new(1, 1, 1)
+	bannerTime.TextXAlignment = Enum.TextXAlignment.Right
 	bannerTime.Text = ""
 	bannerTime.Parent = banner
 
 	RunService.RenderStepped:Connect(function()
 		if banner.Visible then
 			local remaining = activeEndsAt - os.clock()
-			bannerTime.Text = remaining > 0 and ("%ds left"):format(math.ceil(remaining)) or ""
+			bannerTime.Text = remaining > 0 and ("%ds"):format(math.ceil(remaining)) or ""
 		end
 	end)
 

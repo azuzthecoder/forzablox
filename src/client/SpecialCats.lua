@@ -113,12 +113,13 @@ end
 local function setBanner(kind: string, catType: any, text: string, duration: number)
 	local banner = banners[kind]
 	if not banner then
+		-- Compact pill in the top strip, clear of the big cat
 		local frame = Instance.new("TextLabel")
 		frame.AnchorPoint = Vector2.new(0.5, 0)
-		frame.Size = UDim2.new(0, 440, 0, 32)
-		frame.Position = UDim2.new(0.5, 0, 0, 196 + (kind == "discount" and 40 or 0))
+		frame.Size = UDim2.new(0, 400, 0, 26)
+		frame.Position = UDim2.new(0.5, 0, 0, 164 + (kind == "discount" and 30 or 0))
 		frame.Font = Enum.Font.FredokaOne
-		frame.TextSize = 19
+		frame.TextSize = 15
 		frame.Visible = false
 		local corner = Instance.new("UICorner")
 		corner.CornerRadius = UDim.new(0, 12)
